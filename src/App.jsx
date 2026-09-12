@@ -1,10 +1,46 @@
 import React, { useState } from 'react'
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth'
+import { auth } from './firebase'
 
 function App() {
   const [role, setRole] = useState(null)
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [message, setMessage] = useState('')
+
+  const handleEmailAuth = async () => {
+    setMessage('')
+
+    try {
+      if (mode === 'login') {
+        await signInWithEmailAndPassword(auth, email, password)
+        setMessage('Login successful!')
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password)
+        setMessage('Account created successfully!')
+      }
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setMessage('')
+
+    try {
+      const provider = new GoogleAuthProvider()
+      await signInWithPopup(auth, provider)
+      setMessage('Google login successful!')
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
 
   if (role) {
     return (
@@ -38,15 +74,26 @@ function App() {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          <button style={styles.button}>
+          <button style={styles.button} onClick={handleEmailAuth}>
             {mode === 'login' ? 'Login' : 'Create Account'}
           </button>
 
+          <button style={styles.googleButton} onClick={handleGoogleLogin}>
+            Continue with Google
+          </button>
+
+          {message && (
+            <p style={styles.message}>
+              {message}
+            </p>
+          )}
+
           <button
             style={styles.linkButton}
-            onClick={() =>
+            onClick={() => {
               setMode(mode === 'login' ? 'signup' : 'login')
-            }
+              setMessage('')
+            }}
           >
             {mode === 'login'
               ? 'Create a new account'
@@ -58,6 +105,7 @@ function App() {
             onClick={() => {
               setRole(null)
               setMode('login')
+              setMessage('')
             }}
           >
             ← Back
@@ -160,6 +208,26 @@ const styles = {
     color: 'white',
     fontSize: '17px',
     cursor: 'pointer',
+  },
+
+  googleButton: {
+    width: '100%',
+    padding: '15px',
+    marginBottom: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '12px',
+    background: 'white',
+    color: '#333',
+    fontSize: '17px',
+    cursor: 'pointer',
+  },
+
+  message: {
+    color: '#333',
+    fontSize: '14px',
+    lineHeight: '1.5',
+    margin: '10px 0',
+    wordBreak: 'break-word',
   },
 
   linkButton: {
