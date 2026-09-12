@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 
 function App() {
   const [role, setRole] = useState(null)
+  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
@@ -10,10 +11,16 @@ function App() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.logo}>📍</div>
+
           <h1 style={styles.title}>FamilyTrack</h1>
+
           <p style={styles.subtitle}>
-            {role === 'parent' ? 'Parent Login' : 'Child Login'}
+            {role === 'parent' ? 'Parent Account' : 'Child Account'}
           </p>
+
+          <h2 style={styles.question}>
+            {mode === 'login' ? 'Login' : 'Create Account'}
+          </h2>
 
           <input
             style={styles.input}
@@ -32,12 +39,26 @@ function App() {
           />
 
           <button style={styles.button}>
-            Login
+            {mode === 'login' ? 'Login' : 'Create Account'}
+          </button>
+
+          <button
+            style={styles.linkButton}
+            onClick={() =>
+              setMode(mode === 'login' ? 'signup' : 'login')
+            }
+          >
+            {mode === 'login'
+              ? 'Create a new account'
+              : 'Already have an account? Login'}
           </button>
 
           <button
             style={styles.backButton}
-            onClick={() => setRole(null)}
+            onClick={() => {
+              setRole(null)
+              setMode('login')
+            }}
           >
             ← Back
           </button>
@@ -112,7 +133,7 @@ const styles = {
 
   subtitle: {
     color: '#666',
-    marginBottom: '30px',
+    marginBottom: '25px',
   },
 
   question: {
@@ -141,9 +162,20 @@ const styles = {
     cursor: 'pointer',
   },
 
+  linkButton: {
+    width: '100%',
+    padding: '10px',
+    border: 'none',
+    background: 'transparent',
+    color: '#2563eb',
+    fontSize: '15px',
+    cursor: 'pointer',
+  },
+
   backButton: {
     width: '100%',
     padding: '12px',
+    marginTop: '8px',
     border: 'none',
     background: 'transparent',
     color: '#555',
