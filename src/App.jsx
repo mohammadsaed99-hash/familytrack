@@ -2,6 +2,49 @@ import React, { useState } from 'react'
 
 function App() {
   const [role, setRole] = useState(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+
+  if (role) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <div style={styles.logo}>📍</div>
+          <h1 style={styles.title}>FamilyTrack</h1>
+          <p style={styles.subtitle}>
+            {role === 'parent' ? 'Parent Login' : 'Child Login'}
+          </p>
+
+          <input
+            style={styles.input}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button style={styles.button}>
+            Login
+          </button>
+
+          <button
+            style={styles.backButton}
+            onClick={() => setRole(null)}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.page}>
@@ -14,44 +57,23 @@ function App() {
           Family safety made simple
         </p>
 
-        {!role ? (
-          <>
-            <h2 style={styles.question}>Who are you?</h2>
+        <h2 style={styles.question}>
+          Choose your account
+        </h2>
 
-            <button
-              style={styles.button}
-              onClick={() => setRole('parent')}
-            >
-              👨‍👩‍👧 Parent
-            </button>
+        <button
+          style={styles.button}
+          onClick={() => setRole('parent')}
+        >
+          👨‍👩‍👧 Parent
+        </button>
 
-            <button
-              style={styles.button}
-              onClick={() => setRole('child')}
-            >
-              👦 Child
-            </button>
-          </>
-        ) : (
-          <>
-            <h2 style={styles.question}>
-              {role === 'parent' ? 'Parent Account' : 'Child Account'}
-            </h2>
-
-            <p style={styles.text}>
-              {role === 'parent'
-                ? 'Monitor your family and keep everyone connected.'
-                : 'Share your location safely with your family.'}
-            </p>
-
-            <button
-              style={styles.button}
-              onClick={() => setRole(null)}
-            >
-              ← Back
-            </button>
-          </>
-        )}
+        <button
+          style={styles.button}
+          onClick={() => setRole('child')}
+        >
+          👦 Child
+        </button>
       </div>
     </div>
   )
@@ -90,12 +112,21 @@ const styles = {
 
   subtitle: {
     color: '#666',
-    marginBottom: '35px',
+    marginBottom: '30px',
   },
 
   question: {
-    fontSize: '22px',
+    fontSize: '21px',
     marginBottom: '20px',
+  },
+
+  input: {
+    width: '100%',
+    padding: '14px',
+    marginBottom: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '10px',
+    fontSize: '16px',
   },
 
   button: {
@@ -110,10 +141,14 @@ const styles = {
     cursor: 'pointer',
   },
 
-  text: {
+  backButton: {
+    width: '100%',
+    padding: '12px',
+    border: 'none',
+    background: 'transparent',
     color: '#555',
-    lineHeight: '1.6',
-    marginBottom: '25px',
+    fontSize: '16px',
+    cursor: 'pointer',
   },
 }
 
