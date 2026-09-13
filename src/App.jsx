@@ -869,8 +869,63 @@ export default function App() {
       setFcmReady(false)
     }
   }
+async function sendParentNotification(child) {
+  try {
+    const token =
+      localStorage.getItem(
+        'familytrack_fcm_token'
+      ) ||
+      familyData?.parentFcmToken
 
-  function sendParentNotification(child) {
+    if (!token) {
+      console.log(
+        'No FCM token available for parent notifications.'
+      )
+      return
+    }
+
+    const name =
+      child.email ||
+      'Your child'
+
+    const response = await fetch(
+      NOTIFICATION_WORKER_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          title:
+            'FamilyTrack Alert',
+          body: `${name} has left the Safe Zone.`,
+        }),
+      }
+    )
+
+    const result =
+      await response.json()
+
+    if (!response.ok || !result.success) {
+      console.error(
+        'Notification Worker error:',
+        result
+      )
+      return
+    }
+
+    console.log(
+      'Parent notification sent successfully.'
+    )
+  } catch (err) {
+    console.error(
+      'Failed to send parent notification:',
+      err
+    )
+  }
+}
     if (
       typeof Notification ===
         'undefined' ||
