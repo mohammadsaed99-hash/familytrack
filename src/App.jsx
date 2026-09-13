@@ -7,6 +7,19 @@ import {
 } from 'firebase/auth'
 import { auth } from './firebase'
 
+function generateFamilyCode() {
+  const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+
+  for (let i = 0; i < 6; i++) {
+    code += characters.charAt(
+      Math.floor(Math.random() * characters.length)
+    )
+  }
+
+  return code
+}
+
 function App() {
   const [role, setRole] = useState(null)
   const [mode, setMode] = useState('login')
@@ -14,6 +27,7 @@ function App() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [user, setUser] = useState(null)
+  const [familyCode, setFamilyCode] = useState('')
 
   const handleEmailAuth = async () => {
     setMessage('')
@@ -54,8 +68,15 @@ function App() {
     }
   }
 
+  const handleCreateFamily = () => {
+    const code = generateFamilyCode()
+    setFamilyCode(code)
+    setMessage('Family created successfully!')
+  }
+
   const handleLogout = () => {
     setUser(null)
+    setFamilyCode('')
     setMessage('')
   }
 
@@ -86,6 +107,40 @@ function App() {
               {user.email}
             </p>
           </div>
+
+          {role === 'parent' && (
+            <>
+              {!familyCode ? (
+                <button
+                  style={styles.button}
+                  onClick={handleCreateFamily}
+                >
+                  🏠 Create Family
+                </button>
+              ) : (
+                <div style={styles.familyBox}>
+                  <p style={styles.familyTitle}>
+                    Your Family Code
+                  </p>
+
+                  <div style={styles.familyCode}>
+                    {familyCode}
+                  </div>
+
+                  <p style={styles.familyText}>
+                    Give this code to your child to join
+                    your family.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {message && (
+            <p style={styles.successMessage}>
+              {message}
+            </p>
+          )}
 
           <button
             style={styles.button}
@@ -302,6 +357,12 @@ const styles = {
     wordBreak: 'break-word',
   },
 
+  successMessage: {
+    color: '#16803c',
+    fontSize: '14px',
+    margin: '10px 0',
+  },
+
   linkButton: {
     width: '100%',
     padding: '10px',
@@ -341,6 +402,34 @@ const styles = {
     color: '#555',
     margin: '0',
     wordBreak: 'break-word',
+  },
+
+  familyBox: {
+    background: '#eff6ff',
+    borderRadius: '15px',
+    padding: '20px',
+    marginBottom: '20px',
+  },
+
+  familyTitle: {
+    fontSize: '17px',
+    fontWeight: 'bold',
+    margin: '0 0 15px',
+  },
+
+  familyCode: {
+    fontSize: '30px',
+    fontWeight: 'bold',
+    letterSpacing: '5px',
+    color: '#2563eb',
+    marginBottom: '12px',
+  },
+
+  familyText: {
+    fontSize: '14px',
+    color: '#555',
+    margin: '0',
+    lineHeight: '1.5',
   },
 }
 
