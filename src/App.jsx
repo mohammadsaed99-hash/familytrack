@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   GoogleAuthProvider,
@@ -50,6 +50,11 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [loadingFamily, setLoadingFamily] = useState(false)
 
+  const [isTracking, setIsTracking] = useState(false)
+
+  const watchIdRef = useRef(null)
+  const lastSavedRef = useRef(0)
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
@@ -58,6 +63,16 @@ function App() {
     return unsubscribe
   }, [])
 
+  // Stop location tracking when leaving the app
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+    }
+  }, [])
+
+  // Find existing family
   useEffect(() => {
     if (!user || !role) return
 
@@ -108,6 +123,7 @@ function App() {
     findFamily()
   }, [user, role])
 
+  // Load children
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
@@ -281,7 +297,57 @@ function App() {
     }
   }
 
-  const handleShareLocation = () => {
+  // Save child's location
+  const saveLocation = async (position) => {
+    if (!user || !familyCode) return
+
+    const now = Date.now()
+
+    // Save immediately the first time,
+    // then no more than once every 30 seconds.
+    if (
+      lastSavedRef.current !== 0 &&
+      now - lastSavedRef.current < 30000
+    ) {
+      return
+    }
+
+    try {
+      const {
+        latitude,
+        longitude,
+        accuracy,
+      } = position.coords
+
+      await setDoc(
+        doc(
+          db,
+          'families',
+          familyCode,
+          'members',
+          user.uid
+        ),
+        {
+          userId: user.uid,
+          email: user.email,
+          role: 'child',
+          latitude,
+          longitude,
+          accuracy,
+          locationUpdatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+
+      lastSavedRef.current = now
+      setMessage('Location updated successfully!')
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  // Start automatic tracking
+  const handleStartTracking = () => {
     setMessage('')
 
     if (!user) {
@@ -299,34 +365,40 @@ function App() {
       return
     }
 
+    if (isTracking) {
+      return
+    }
+
     setLoading(true)
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const { latitude, longitude, accuracy } = position.coords
+          await saveLocation(position)
 
-          await setDoc(
-            doc(
-              db,
-              'families',
-              familyCode,
-              'members',
-              user.uid
-            ),
-            {
-              userId: user.uid,
-              email: user.email,
-              role: 'child',
-              latitude,
-              longitude,
-              accuracy,
-              locationUpdatedAt: serverTimestamp(),
+          const watchId = navigator.geolocation.watchPosition(
+            async (newPosition) => {
+              await saveLocation(newPosition)
             },
-            { merge: true }
+            (error) => {
+              if (error.code === 1) {
+                setMessage('Location permission was denied.')
+              } else if (error.code === 2) {
+                setMessage('Location is unavailable.')
+              } else {
+                setMessage('Unable to update location.')
+              }
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 10000,
+            }
           )
 
-          setMessage('Location shared successfully!')
+          watchIdRef.current = watchId
+          setIsTracking(true)
+          setMessage('Live location tracking started!')
         } catch (error) {
           setMessage(error.message)
         } finally {
@@ -352,7 +424,31 @@ function App() {
     )
   }
 
+  // Stop automatic tracking
+  const handleStopTracking = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(
+        watchIdRef.current
+      )
+
+      watchIdRef.current = null
+    }
+
+    setIsTracking(false)
+    setMessage('Live location tracking stopped.')
+  }
+
   const handleLogout = async () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(
+        watchIdRef.current
+      )
+
+      watchIdRef.current = null
+    }
+
+    setIsTracking(false)
+
     await signOut(auth)
 
     setUser(null)
@@ -410,6 +506,18 @@ function App() {
       borderRadius: '10px',
       border: 'none',
       background: '#2563eb',
+      color: '#fff',
+      fontSize: '16px',
+      cursor: 'pointer',
+    },
+
+    stopButton: {
+      width: '100%',
+      padding: '13px',
+      marginBottom: '10px',
+      borderRadius: '10px',
+      border: 'none',
+      background: '#dc2626',
       color: '#fff',
       fontSize: '16px',
       cursor: 'pointer',
@@ -610,7 +718,9 @@ function App() {
                   onClick={handleCreateFamily}
                   disabled={loading}
                 >
-                  {loading ? 'Creating...' : 'Create Family'}
+                  {loading
+                    ? 'Creating...'
+                    : 'Create Family'}
                 </button>
               </>
             ) : (
@@ -711,7 +821,9 @@ function App() {
                   placeholder="Family Code"
                   value={joinCode}
                   onChange={(e) =>
-                    setJoinCode(e.target.value.toUpperCase())
+                    setJoinCode(
+                      e.target.value.toUpperCase()
+                    )
                   }
                 />
 
@@ -733,20 +845,47 @@ function App() {
                   {familyCode}
                 </div>
 
-                <button
-                  style={styles.button}
-                  onClick={handleShareLocation}
-                  disabled={loading}
-                >
-                  {loading
-                    ? 'Getting location...'
-                    : '📍 Share My Location'}
-                </button>
+                {!isTracking ? (
+                  <>
+                    <button
+                      style={styles.button}
+                      onClick={handleStartTracking}
+                      disabled={loading}
+                    >
+                      {loading
+                        ? 'Starting...'
+                        : '📍 Start Live Location'}
+                    </button>
 
-                <p>
-                  Press the button to share your current
-                  location with your family.
-                </p>
+                    <p>
+                      Start live tracking to automatically
+                      share your location.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        padding: '12px',
+                        marginBottom: '10px',
+                        borderRadius: '10px',
+                        background: '#dcfce7',
+                        color: '#166534',
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      🟢 Live location is active
+                    </div>
+
+                    <button
+                      style={styles.stopButton}
+                      onClick={handleStopTracking}
+                    >
+                      🛑 Stop Location Sharing
+                    </button>
+                  </>
+                )}
               </>
             )}
           </>
