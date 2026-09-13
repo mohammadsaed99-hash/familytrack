@@ -20,11 +20,14 @@ import {
 } from 'firebase/firestore'
 
 import 'leaflet/dist/leaflet.css'
+
 import {
   MapContainer,
   Marker,
   Popup,
   TileLayer,
+  Circle,
+  useMapEvents,
 } from 'react-leaflet'
 
 import { auth, db } from './firebase'
@@ -38,6 +41,21 @@ function generateFamilyCode() {
   }
 
   return code
+}
+
+const SAFE_ZONE_RADIUS = 100
+
+function LocationPicker({ onPick }) {
+  useMapEvents({
+    click(e) {
+      onPick({
+        latitude: e.latlng.lat,
+        longitude: e.latlng.lng,
+      })
+    },
+  })
+
+  return null
 }
 
 function App() {
@@ -56,6 +74,9 @@ function App() {
   const [loadingFamily, setLoadingFamily] = useState(false)
 
   const [isTracking, setIsTracking] = useState(false)
+
+  const [safeZone, setSafeZone] = useState(null)
+  const [settingSafeZone, setSettingSafeZone] = useState(false)
 
   const watchIdRef = useRef(null)
   const lastSavedRef = useRef(0)
@@ -78,6 +99,7 @@ function App() {
     }
   }, [])
 
+  // Find family
   useEffect(() => {
     if (!user || !role) return
 
@@ -97,6 +119,16 @@ function App() {
 
           if (family) {
             setFamilyCode(family.id)
+
+            const data = family.data()
+
+            if (
+              data.safeZone &&
+              typeof data.safeZone.latitude === 'number' &&
+              typeof data.safeZone.longitude === 'number'
+            ) {
+              setSafeZone(data.safeZone)
+            }
           }
         }
 
@@ -114,6 +146,17 @@ function App() {
 
             if (memberSnapshot.exists()) {
               setFamilyCode(familyDoc.id)
+
+              const data = familyDoc.data()
+
+              if (
+                data.safeZone &&
+                typeof data.safeZone.latitude === 'number' &&
+                typeof data.safeZone.longitude === 'number'
+              ) {
+                setSafeZone(data.safeZone)
+              }
+
               break
             }
           }
@@ -127,6 +170,39 @@ function App() {
 
     findFamily()
   }, [user, role])
+
+  // Live family / Safe Zone updates
+  useEffect(() => {
+    if (!user || !familyCode) return
+
+    const familyRef = doc(
+      db,
+      'families',
+      familyCode
+    )
+
+    const unsubscribe = onSnapshot(
+      familyRef,
+      (snapshot) => {
+        if (!snapshot.exists()) return
+
+        const data = snapshot.data()
+
+        if (
+          data.safeZone &&
+          typeof data.safeZone.latitude === 'number' &&
+          typeof data.safeZone.longitude === 'number'
+        ) {
+          setSafeZone(data.safeZone)
+        }
+      },
+      (error) => {
+        setMessage(error.message)
+      }
+    )
+
+    return unsubscribe
+  }, [user, familyCode])
 
   // Live children updates
   useEffect(() => {
@@ -325,6 +401,70 @@ function App() {
     }
   }
 
+  // Save Safe Zone
+  const handleSetSafeZone = async (location) => {
+    if (!user || !familyCode) return
+
+    try {
+      setLoading(true)
+
+      const newSafeZone = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        radius: SAFE_ZONE_RADIUS,
+        updatedAt: serverTimestamp(),
+      }
+
+      await setDoc(
+        doc(db, 'families', familyCode),
+        {
+          safeZone: newSafeZone,
+        },
+        {
+          merge: true,
+        }
+      )
+
+      setSafeZone(newSafeZone)
+      setSettingSafeZone(false)
+
+      setMessage(
+        'Safe Zone created successfully — radius 100 meters.'
+      )
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRemoveSafeZone = async () => {
+    if (!user || !familyCode) return
+
+    try {
+      setLoading(true)
+
+      await setDoc(
+        doc(db, 'families', familyCode),
+        {
+          safeZone: null,
+        },
+        {
+          merge: true,
+        }
+      )
+
+      setSafeZone(null)
+      setSettingSafeZone(false)
+
+      setMessage('Safe Zone removed.')
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const saveLocation = async (position) => {
     if (!user || !familyCode) return
 
@@ -429,6 +569,7 @@ function App() {
 
           watchIdRef.current = watchId
           setIsTracking(true)
+
           setMessage(
             'Live location tracking started!'
           )
@@ -473,6 +614,7 @@ function App() {
     }
 
     setIsTracking(false)
+
     setMessage(
       'Live location tracking stopped.'
     )
@@ -495,6 +637,7 @@ function App() {
     setFamilyCode('')
     setJoinCode('')
     setChildren([])
+    setSafeZone(null)
     setMessage('')
   }
 
@@ -746,6 +889,21 @@ function App() {
       marginBottom: '12px',
     },
 
+    safeZoneBox: {
+      padding: '18px',
+      borderRadius: '18px',
+      background: '#f0fdf4',
+      border: '1px solid #bbf7d0',
+      marginBottom: '22px',
+    },
+
+    safeZoneTitle: {
+      fontSize: '19px',
+      fontWeight: 'bold',
+      color: '#166534',
+      marginBottom: '8px',
+    },
+
     message: {
       marginTop: '18px',
       padding: '13px',
@@ -938,9 +1096,7 @@ function App() {
                     👨‍👩‍👧‍👦
                   </div>
 
-                  <h3>
-                    Create your family
-                  </h3>
+                  <h3>Create your family</h3>
 
                   <p
                     style={{
@@ -1014,6 +1170,73 @@ function App() {
                     </div>
                   </div>
 
+                  {/* SAFE ZONE */}
+                  <div style={styles.safeZoneBox}>
+                    <div style={styles.safeZoneTitle}>
+                      🟢 Safe Zone
+                    </div>
+
+                    {!safeZone ? (
+                      <>
+                        <p
+                          style={{
+                            color: '#475569',
+                            marginTop: 0,
+                          }}
+                        >
+                          No Safe Zone has been set.
+                          The Safe Zone radius will be
+                          exactly 100 meters.
+                        </p>
+
+                        <button
+                          style={styles.button}
+                          onClick={() => {
+                            setSettingSafeZone(true)
+                            setMessage(
+                              'Click on the map to choose the Safe Zone center.'
+                            )
+                          }}
+                        >
+                          📍 Set Safe Zone
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p
+                          style={{
+                            color: '#166534',
+                            marginTop: 0,
+                          }}
+                        >
+                          Safe Zone is active.
+                          <br />
+                          Radius: <strong>100 meters</strong>
+                        </p>
+
+                        <button
+                          style={styles.secondaryButton}
+                          onClick={() => {
+                            setSettingSafeZone(true)
+                            setMessage(
+                              'Click on the map to move the Safe Zone.'
+                            )
+                          }}
+                        >
+                          📍 Change Safe Zone
+                        </button>
+
+                        <button
+                          style={styles.stopButton}
+                          onClick={handleRemoveSafeZone}
+                          disabled={loading}
+                        >
+                          Remove Safe Zone
+                        </button>
+                      </>
+                    )}
+                  </div>
+
                   <h2 style={styles.sectionTitle}>
                     👨‍👩‍👧‍👦 Family Members
                   </h2>
@@ -1036,9 +1259,7 @@ function App() {
                           </div>
 
                           <div>
-                            <strong>
-                              Child
-                            </strong>
+                            <strong>Child</strong>
 
                             <div
                               style={{
@@ -1088,6 +1309,26 @@ function App() {
                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                               />
 
+                              {settingSafeZone && (
+                                <LocationPicker
+                                  onPick={
+                                    handleSetSafeZone
+                                  }
+                                />
+                              )}
+
+                              {safeZone && (
+                                <Circle
+                                  center={[
+                                    safeZone.latitude,
+                                    safeZone.longitude,
+                                  ]}
+                                  radius={
+                                    SAFE_ZONE_RADIUS
+                                  }
+                                />
+                              )}
+
                               <Marker
                                 position={[
                                   child.latitude,
@@ -1105,6 +1346,28 @@ function App() {
                                 </Popup>
                               </Marker>
                             </MapContainer>
+
+                            {settingSafeZone && (
+                              <div
+                                style={{
+                                  marginTop: '10px',
+                                  padding: '12px',
+                                  borderRadius: '12px',
+                                  background:
+                                    '#dbeafe',
+                                  color:
+                                    '#1e40af',
+                                  textAlign:
+                                    'center',
+                                  fontWeight:
+                                    'bold',
+                                }}
+                              >
+                                👆 Click anywhere on
+                                the map to set the
+                                100-meter Safe Zone
+                              </div>
+                            )}
 
                             <div
                               style={{
@@ -1150,9 +1413,7 @@ function App() {
                     👨‍👩‍👧‍👦
                   </div>
 
-                  <h3>
-                    Join your family
-                  </h3>
+                  <h3>Join your family</h3>
 
                   <p
                     style={{
@@ -1201,6 +1462,26 @@ function App() {
                       {familyCode}
                     </div>
                   </div>
+
+                  {safeZone && (
+                    <div style={styles.safeZoneBox}>
+                      <div
+                        style={styles.safeZoneTitle}
+                      >
+                        🟢 Safe Zone Active
+                      </div>
+
+                      <div
+                        style={{
+                          color: '#166534',
+                        }}
+                      >
+                        Your family Safe Zone radius
+                        is{' '}
+                        <strong>100 meters</strong>.
+                      </div>
+                    </div>
+                  )}
 
                   <div style={styles.trackingBox}>
                     {isTracking ? (
