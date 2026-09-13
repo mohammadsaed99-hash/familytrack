@@ -1,3 +1,4 @@
+```jsx
 import React, { useState } from 'react'
 import {
   createUserWithEmailAndPassword,
@@ -13,16 +14,29 @@ function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
+  const [user, setUser] = useState(null)
 
   const handleEmailAuth = async () => {
     setMessage('')
 
     try {
       if (mode === 'login') {
-        await signInWithEmailAndPassword(auth, email, password)
+        const result = await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
+
+        setUser(result.user)
         setMessage('Login successful!')
       } else {
-        await createUserWithEmailAndPassword(auth, email, password)
+        const result = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
+
+        setUser(result.user)
         setMessage('Account created successfully!')
       }
     } catch (error) {
@@ -35,11 +49,51 @@ function App() {
 
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
+      const result = await signInWithPopup(auth, provider)
+
+      setUser(result.user)
       setMessage('Google login successful!')
     } catch (error) {
       setMessage(error.message)
     }
+  }
+
+  if (user) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <div style={styles.logo}>📍</div>
+
+          <h1 style={styles.title}>FamilyTrack</h1>
+
+          <p style={styles.subtitle}>
+            Welcome to FamilyTrack
+          </p>
+
+          <h2 style={styles.question}>
+            {role === 'parent' ? 'Parent Dashboard' : 'Child Dashboard'}
+          </h2>
+
+          <p style={styles.message}>
+            You are logged in as:
+          </p>
+
+          <p style={styles.email}>
+            {user.email}
+          </p>
+
+          <button
+            style={styles.button}
+            onClick={() => {
+              setUser(null)
+              setMessage('')
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (role) {
@@ -51,11 +105,15 @@ function App() {
           <h1 style={styles.title}>FamilyTrack</h1>
 
           <p style={styles.subtitle}>
-            {role === 'parent' ? 'Parent Account' : 'Child Account'}
+            {role === 'parent'
+              ? 'Parent Account'
+              : 'Child Account'}
           </p>
 
           <h2 style={styles.question}>
-            {mode === 'login' ? 'Login' : 'Create Account'}
+            {mode === 'login'
+              ? 'Login'
+              : 'Create Account'}
           </h2>
 
           <input
@@ -74,11 +132,19 @@ function App() {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          <button style={styles.button} onClick={handleEmailAuth}>
-            {mode === 'login' ? 'Login' : 'Create Account'}
+          <button
+            style={styles.button}
+            onClick={handleEmailAuth}
+          >
+            {mode === 'login'
+              ? 'Login'
+              : 'Create Account'}
           </button>
 
-          <button style={styles.googleButton} onClick={handleGoogleLogin}>
+          <button
+            style={styles.googleButton}
+            onClick={handleGoogleLogin}
+          >
             Continue with Google
           </button>
 
@@ -91,7 +157,11 @@ function App() {
           <button
             style={styles.linkButton}
             onClick={() => {
-              setMode(mode === 'login' ? 'signup' : 'login')
+              setMode(
+                mode === 'login'
+                  ? 'signup'
+                  : 'login'
+              )
               setMessage('')
             }}
           >
@@ -230,6 +300,13 @@ const styles = {
     wordBreak: 'break-word',
   },
 
+  email: {
+    fontSize: '16px',
+    fontWeight: 'bold',
+    marginBottom: '25px',
+    wordBreak: 'break-word',
+  },
+
   linkButton: {
     width: '100%',
     padding: '10px',
@@ -253,3 +330,4 @@ const styles = {
 }
 
 export default App
+```
