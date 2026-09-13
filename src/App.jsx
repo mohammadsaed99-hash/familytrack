@@ -1,4 +1,3 @@
-```jsx
 import React, { useState } from 'react'
 import {
   createUserWithEmailAndPassword,
@@ -28,7 +27,6 @@ function App() {
         )
 
         setUser(result.user)
-        setMessage('Login successful!')
       } else {
         const result = await createUserWithEmailAndPassword(
           auth,
@@ -37,7 +35,6 @@ function App() {
         )
 
         setUser(result.user)
-        setMessage('Account created successfully!')
       }
     } catch (error) {
       setMessage(error.message)
@@ -52,10 +49,14 @@ function App() {
       const result = await signInWithPopup(auth, provider)
 
       setUser(result.user)
-      setMessage('Google login successful!')
     } catch (error) {
       setMessage(error.message)
     }
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    setMessage('')
   }
 
   if (user) {
@@ -67,27 +68,28 @@ function App() {
           <h1 style={styles.title}>FamilyTrack</h1>
 
           <p style={styles.subtitle}>
-            Welcome to FamilyTrack
+            Family safety made simple
           </p>
 
           <h2 style={styles.question}>
-            {role === 'parent' ? 'Parent Dashboard' : 'Child Dashboard'}
+            {role === 'parent'
+              ? 'Parent Dashboard'
+              : 'Child Dashboard'}
           </h2>
 
-          <p style={styles.message}>
-            You are logged in as:
-          </p>
+          <div style={styles.dashboardBox}>
+            <p style={styles.dashboardTitle}>
+              Welcome!
+            </p>
 
-          <p style={styles.email}>
-            {user.email}
-          </p>
+            <p style={styles.dashboardText}>
+              {user.email}
+            </p>
+          </div>
 
           <button
             style={styles.button}
-            onClick={() => {
-              setUser(null)
-              setMessage('')
-            }}
+            onClick={handleLogout}
           >
             Logout
           </button>
@@ -293,17 +295,10 @@ const styles = {
   },
 
   message: {
-    color: '#333',
+    color: '#d00',
     fontSize: '14px',
     lineHeight: '1.5',
     margin: '10px 0',
-    wordBreak: 'break-word',
-  },
-
-  email: {
-    fontSize: '16px',
-    fontWeight: 'bold',
-    marginBottom: '25px',
     wordBreak: 'break-word',
   },
 
@@ -327,7 +322,26 @@ const styles = {
     fontSize: '16px',
     cursor: 'pointer',
   },
+
+  dashboardBox: {
+    background: '#f5f7fa',
+    borderRadius: '12px',
+    padding: '20px',
+    marginBottom: '20px',
+  },
+
+  dashboardTitle: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    margin: '0 0 10px',
+  },
+
+  dashboardText: {
+    fontSize: '14px',
+    color: '#555',
+    margin: '0',
+    wordBreak: 'break-word',
+  },
 }
 
 export default App
-```
