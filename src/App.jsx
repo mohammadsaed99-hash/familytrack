@@ -18,6 +18,10 @@ import {
   setDoc,
 } from 'firebase/firestore'
 
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+
 import { auth, db } from './firebase'
 
 function generateFamilyCode() {
@@ -54,7 +58,6 @@ function App() {
     return unsubscribe
   }, [])
 
-  // Find existing family
   useEffect(() => {
     if (!user || !role) return
 
@@ -105,7 +108,6 @@ function App() {
     findFamily()
   }, [user, role])
 
-  // Load children
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
@@ -279,7 +281,6 @@ function App() {
     }
   }
 
-  // Share child's current location
   const handleShareLocation = () => {
     setMessage('')
 
@@ -374,7 +375,7 @@ function App() {
 
     card: {
       width: '100%',
-      maxWidth: '450px',
+      maxWidth: '600px',
       background: '#ffffff',
       borderRadius: '18px',
       padding: '30px',
@@ -642,10 +643,44 @@ function App() {
                           {child.email}
                         </div>
 
-                        {child.latitude && child.longitude ? (
-                          <div style={{ marginTop: '8px' }}>
-                            📍 Location shared
-                          </div>
+                        {child.latitude &&
+                        child.longitude ? (
+                          <>
+                            <div style={{ marginTop: '8px' }}>
+                              📍 Location shared
+                            </div>
+
+                            <MapContainer
+                              center={[
+                                child.latitude,
+                                child.longitude,
+                              ]}
+                              zoom={15}
+                              scrollWheelZoom={true}
+                            >
+                              <TileLayer
+                                attribution='&copy; OpenStreetMap contributors'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                              />
+
+                              <Marker
+                                position={[
+                                  child.latitude,
+                                  child.longitude,
+                                ]}
+                              >
+                                <Popup>
+                                  👦 Child location
+                                  <br />
+                                  Accuracy:{' '}
+                                  {Math.round(
+                                    child.accuracy || 0
+                                  )}{' '}
+                                  meters
+                                </Popup>
+                              </Marker>
+                            </MapContainer>
+                          </>
                         ) : (
                           <div style={{ marginTop: '8px' }}>
                             📍 No location yet
