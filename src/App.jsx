@@ -45,7 +45,9 @@ function App() {
 
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingFamily, setLoadingFamily] = useState(false)
 
+  // Watch login state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
@@ -54,7 +56,63 @@ function App() {
     return unsubscribe
   }, [])
 
-  // Load children from Firestore
+  // Automatically find the user's existing family
+  useEffect(() => {
+    if (!user || !role) return
+
+    const findFamily = async () => {
+      try {
+        setLoadingFamily(true)
+        setMessage('')
+
+        // Parent: search families for parentId == current user
+        if (role === 'parent') {
+          const familiesRef = collection(db, 'families')
+          const snapshot = await getDocs(familiesRef)
+
+          const family = snapshot.docs.find(
+            (familyDoc) =>
+              familyDoc.data().parentId === user.uid
+          )
+
+          if (family) {
+            setFamilyCode(family.id)
+          }
+        }
+
+        // Child: search family member documents
+        if (role === 'child') {
+          const familiesRef = collection(db, 'families')
+          const familiesSnapshot = await getDocs(familiesRef)
+
+          for (const familyDoc of familiesSnapshot.docs) {
+            const memberRef = doc(
+              db,
+              'families',
+              familyDoc.id,
+              'members',
+              user.uid
+            )
+
+            const memberSnapshot = await getDoc(memberRef)
+
+            if (memberSnapshot.exists()) {
+              setFamilyCode(familyDoc.id)
+              break
+            }
+          }
+        }
+      } catch (error) {
+        setMessage(error.message)
+      } finally {
+        setLoadingFamily(false)
+      }
+    }
+
+    findFamily()
+  }, [user, role])
+
+  // Load children for parent
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
@@ -454,6 +512,20 @@ function App() {
     )
   }
 
+  if (loadingFamily) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>FamilyTrack</h1>
+
+          <p style={styles.subtitle}>
+            Loading your family...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
@@ -470,8 +542,7 @@ function App() {
             {!familyCode ? (
               <>
                 <p>
-                  Create a family and give the Family Code
-                  to your children.
+                  You don't have a family yet.
                 </p>
 
                 <button
@@ -491,8 +562,8 @@ function App() {
                 </div>
 
                 <p>
-                  Give this code to your child so they can
-                  join your family.
+                  Give this code to your children so they
+                  can join your family.
                 </p>
 
                 <div style={styles.section}>
@@ -561,8 +632,8 @@ function App() {
                 </div>
 
                 <p>
-                  Your account is now registered as a
-                  child in this family.
+                  Your account is registered as a child
+                  in this family.
                 </p>
               </>
             )}
