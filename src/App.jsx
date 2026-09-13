@@ -18,7 +18,11 @@ import {
   where,
   serverTimestamp,
 } from 'firebase/firestore'
-import { getToken } from 'firebase/messaging'
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+} from 'firebase/messaging'
 import {
   MapContainer,
   Marker,
@@ -29,7 +33,7 @@ import {
 } from 'react-leaflet'
 import L from 'leaflet'
 
-import { auth, db, messaging } from './firebase'
+import { auth, db } from './firebase'
 
 const VAPID_KEY =
   'BEYnLQTQeaIbsVU6q1V5jLvXDOurQNOovshiLAhFv82QfYYkY-bp3XOMIK3uFvW-nVhHXccuDnDGtf7alSEqFHw'
@@ -102,9 +106,12 @@ export default function App() {
   const [safeZoneStatus, setSafeZoneStatus] = useState('unknown')
   const [distanceFromSafeZone, setDistanceFromSafeZone] = useState(null)
 
-  const [notificationPermission, setNotificationPermission] = useState(
-    typeof Notification !== 'undefined' ? Notification.permission : 'default'
-  )
+  const [notificationPermission, setNotificationPermission] =
+    useState(
+      typeof Notification !== 'undefined'
+        ? Notification.permission
+        : 'default'
+    )
 
   const [fcmReady, setFcmReady] = useState(false)
 
@@ -112,27 +119,32 @@ export default function App() {
   const previousChildStatusRef = useRef({})
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser)
-      setLoading(false)
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        setUser(currentUser)
+        setLoading(false)
 
-      if (!currentUser) {
-        setRole(null)
-        setFamilyCode('')
-        setFamilyData(null)
-        setChildren([])
-        return
+        if (!currentUser) {
+          setRole(null)
+          setFamilyCode('')
+          setFamilyData(null)
+          setChildren([])
+          return
+        }
+
+        await findUserFamily(currentUser)
       }
-
-      await findUserFamily(currentUser)
-    })
+    )
 
     return () => unsubscribe()
   }, [])
 
   async function findUserFamily(currentUser) {
     try {
-      const familiesSnapshot = await getDocs(collection(db, 'families'))
+      const familiesSnapshot = await getDocs(
+        collection(db, 'families')
+      )
 
       let foundFamily = null
       let foundRole = null
@@ -145,27 +157,26 @@ export default function App() {
             id: familyDoc.id,
             ...data,
           }
+
           foundRole = 'parent'
           break
         }
 
-        const memberRef = doc(
-          db,
-          'families',
-          familyDoc.id,
-          'members',
-          currentUser.uid
-        )
-
         const memberSnapshot = await getDocs(
           query(
-            collection(db, 'families', familyDoc.id, 'members'),
+            collection(
+              db,
+              'families',
+              familyDoc.id,
+              'members'
+            ),
             where('__name__', '==', currentUser.uid)
           )
         )
 
         if (!memberSnapshot.empty) {
-          const memberData = memberSnapshot.docs[0].data()
+          const memberData =
+            memberSnapshot.docs[0].data()
 
           foundFamily = {
             id: familyDoc.id,
@@ -176,8 +187,6 @@ export default function App() {
           foundRole = 'child'
           break
         }
-
-        void memberRef
       }
 
       if (foundFamily) {
@@ -193,19 +202,27 @@ export default function App() {
   useEffect(() => {
     if (!familyCode || role !== 'parent') return
 
-    const familyRef = doc(db, 'families', familyCode)
+    const familyRef = doc(
+      db,
+      'families',
+      familyCode
+    )
 
-    const unsubscribeFamily = onSnapshot(familyRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data()
-        setFamilyData({
-          id: snapshot.id,
-          ...data,
-        })
+    const unsubscribeFamily = onSnapshot(
+      familyRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data()
 
-        setSafeZone(data.safeZone || null)
+          setFamilyData({
+            id: snapshot.id,
+            ...data,
+          })
+
+          setSafeZone(data.safeZone || null)
+        }
       }
-    })
+    )
 
     const membersRef = collection(
       db,
@@ -214,14 +231,17 @@ export default function App() {
       'members'
     )
 
-    const unsubscribeMembers = onSnapshot(membersRef, (snapshot) => {
-      const list = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
+    const unsubscribeMembers = onSnapshot(
+      membersRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
 
-      setChildren(list)
-    })
+        setChildren(list)
+      }
+    )
 
     return () => {
       unsubscribeFamily()
@@ -230,7 +250,9 @@ export default function App() {
   }, [familyCode, role])
 
   useEffect(() => {
-    if (!familyCode || role !== 'child' || !user) return
+    if (!familyCode || role !== 'child' || !user) {
+      return
+    }
 
     const memberRef = doc(
       db,
@@ -240,29 +262,36 @@ export default function App() {
       user.uid
     )
 
-    const unsubscribe = onSnapshot(memberRef, (snapshot) => {
-      if (!snapshot.exists()) return
+    const unsubscribe = onSnapshot(
+      memberRef,
+      (snapshot) => {
+        if (!snapshot.exists()) return
 
-      const data = snapshot.data()
+        const data = snapshot.data()
 
-      if (
-        typeof data.latitude === 'number' &&
-        typeof data.longitude === 'number'
-      ) {
-        setLocation({
-          latitude: data.latitude,
-          longitude: data.longitude,
-          accuracy: data.accuracy,
-        })
+        if (
+          typeof data.latitude === 'number' &&
+          typeof data.longitude === 'number'
+        ) {
+          setLocation({
+            latitude: data.latitude,
+            longitude: data.longitude,
+            accuracy: data.accuracy,
+          })
 
-        setSafeZoneStatus(data.safeZoneStatus || 'unknown')
-        setDistanceFromSafeZone(
-          typeof data.distanceFromSafeZone === 'number'
-            ? data.distanceFromSafeZone
-            : null
-        )
+          setSafeZoneStatus(
+            data.safeZoneStatus || 'unknown'
+          )
+
+          setDistanceFromSafeZone(
+            typeof data.distanceFromSafeZone ===
+              'number'
+              ? data.distanceFromSafeZone
+              : null
+          )
+        }
       }
-    })
+    )
 
     return () => unsubscribe()
   }, [familyCode, role, user])
@@ -271,7 +300,12 @@ export default function App() {
     if (!familyCode || role !== 'parent') return
 
     const unsubscribe = onSnapshot(
-      collection(db, 'families', familyCode, 'members'),
+      collection(
+        db,
+        'families',
+        familyCode,
+        'members'
+      ),
       (snapshot) => {
         snapshot.docs.forEach((item) => {
           const child = {
@@ -290,8 +324,9 @@ export default function App() {
             sendParentNotification(child)
           }
 
-          previousChildStatusRef.current[child.id] =
-            child.safeZoneStatus || 'unknown'
+          previousChildStatusRef.current[
+            child.id
+          ] = child.safeZoneStatus || 'unknown'
         })
       }
     )
@@ -311,7 +346,9 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
+        navigator.geolocation.clearWatch(
+          watchIdRef.current
+        )
       }
     }
   }, [])
@@ -321,19 +358,24 @@ export default function App() {
     setMessage('')
 
     if (!email || !password) {
-      setError('Please enter email and password.')
+      setError(
+        'Please enter email and password.'
+      )
       return
     }
 
     try {
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      )
+      const result =
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
 
       setUser(result.user)
-      setMessage('Account created successfully.')
+      setMessage(
+        'Account created successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
@@ -344,19 +386,24 @@ export default function App() {
     setMessage('')
 
     if (!email || !password) {
-      setError('Please enter email and password.')
+      setError(
+        'Please enter email and password.'
+      )
       return
     }
 
     try {
-      const result = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      )
+      const result =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
 
       setUser(result.user)
-      setMessage('Logged in successfully.')
+      setMessage(
+        'Logged in successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
@@ -367,11 +414,19 @@ export default function App() {
     setMessage('')
 
     try {
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
+      const provider =
+        new GoogleAuthProvider()
+
+      const result =
+        await signInWithPopup(
+          auth,
+          provider
+        )
 
       setUser(result.user)
-      setMessage('Logged in successfully.')
+      setMessage(
+        'Logged in successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
@@ -389,11 +444,14 @@ export default function App() {
         .substring(2, 8)
         .toUpperCase()
 
-      await setDoc(doc(db, 'families', code), {
-        parentId: user.uid,
-        parentEmail: user.email || '',
-        createdAt: serverTimestamp(),
-      })
+      await setDoc(
+        doc(db, 'families', code),
+        {
+          parentId: user.uid,
+          parentEmail: user.email || '',
+          createdAt: serverTimestamp(),
+        }
+      )
 
       setFamilyCode(code)
       setRole('parent')
@@ -404,7 +462,9 @@ export default function App() {
         parentEmail: user.email || '',
       })
 
-      setMessage('Family created successfully.')
+      setMessage(
+        'Family created successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
@@ -417,9 +477,8 @@ export default function App() {
     setMessage('')
 
     try {
-      const code = joinCode.trim().toUpperCase()
-
-      const familyRef = doc(db, 'families', code)
+      const code =
+        joinCode.trim().toUpperCase()
 
       const familySnapshot = await getDocs(
         query(
@@ -429,7 +488,9 @@ export default function App() {
       )
 
       if (familySnapshot.empty) {
-        setError('Family code not found.')
+        setError(
+          'Family code not found.'
+        )
         return
       }
 
@@ -448,17 +509,21 @@ export default function App() {
         joinedAt: serverTimestamp(),
       })
 
-      const familyDataSnapshot = familySnapshot.docs[0].data()
+      const familyDataSnapshot =
+        familySnapshot.docs[0].data()
 
       setFamilyCode(code)
+
       setFamilyData({
         id: code,
         ...familyDataSnapshot,
       })
+
       setRole('child')
 
-      setMessage('You joined the family successfully.')
-      void familyRef
+      setMessage(
+        'You joined the family successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
@@ -466,12 +531,16 @@ export default function App() {
 
   function startLocationTracking() {
     if (!navigator.geolocation) {
-      setError('Geolocation is not supported by this browser.')
+      setError(
+        'Geolocation is not supported by this browser.'
+      )
       return
     }
 
     if (!familyCode || !user) {
-      setError('You are not connected to a family.')
+      setError(
+        'You are not connected to a family.'
+      )
       return
     }
 
@@ -480,109 +549,132 @@ export default function App() {
     }
 
     setError('')
-    setMessage('Starting live location...')
+    setMessage(
+      'Starting live location...'
+    )
 
     let lastSent = 0
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      async (position) => {
-        const now = Date.now()
+    watchIdRef.current =
+      navigator.geolocation.watchPosition(
+        async (position) => {
+          const now = Date.now()
 
-        if (now - lastSent < 30000) {
-          return
-        }
+          if (now - lastSent < 30000) {
+            return
+          }
 
-        lastSent = now
+          lastSent = now
 
-        const latitude = position.coords.latitude
-        const longitude = position.coords.longitude
-        const accuracy = position.coords.accuracy
+          const latitude =
+            position.coords.latitude
 
-        setLocation({
-          latitude,
-          longitude,
-          accuracy,
-        })
+          const longitude =
+            position.coords.longitude
 
-        let status = 'unknown'
-        let distance = null
+          const accuracy =
+            position.coords.accuracy
 
-        if (
-          safeZone &&
-          typeof safeZone.latitude === 'number' &&
-          typeof safeZone.longitude === 'number'
-        ) {
-          distance = calculateDistance(
+          setLocation({
             latitude,
             longitude,
-            safeZone.latitude,
-            safeZone.longitude
-          )
+            accuracy,
+          })
 
-          status =
-            distance <= SAFE_ZONE_RADIUS
-              ? 'inside'
-              : 'outside'
-        }
+          let status = 'unknown'
+          let distance = null
 
-        setSafeZoneStatus(status)
-        setDistanceFromSafeZone(distance)
-
-        try {
-          const memberRef = doc(
-            db,
-            'families',
-            familyCode,
-            'members',
-            user.uid
-          )
-
-          await setDoc(
-            memberRef,
-            {
-              userId: user.uid,
-              email: user.email || '',
-              role: 'child',
+          if (
+            safeZone &&
+            typeof safeZone.latitude ===
+              'number' &&
+            typeof safeZone.longitude ===
+              'number'
+          ) {
+            distance = calculateDistance(
               latitude,
               longitude,
-              accuracy,
-              locationUpdatedAt: serverTimestamp(),
-              safeZoneStatus: status,
-              distanceFromSafeZone: distance,
-            },
-            { merge: true }
-          )
+              safeZone.latitude,
+              safeZone.longitude
+            )
 
-          setMessage('Live location updated.')
-        } catch (err) {
+            status =
+              distance <= SAFE_ZONE_RADIUS
+                ? 'inside'
+                : 'outside'
+          }
+
+          setSafeZoneStatus(status)
+          setDistanceFromSafeZone(distance)
+
+          try {
+            const memberRef = doc(
+              db,
+              'families',
+              familyCode,
+              'members',
+              user.uid
+            )
+
+            await setDoc(
+              memberRef,
+              {
+                userId: user.uid,
+                email: user.email || '',
+                role: 'child',
+                latitude,
+                longitude,
+                accuracy,
+                locationUpdatedAt:
+                  serverTimestamp(),
+                safeZoneStatus: status,
+                distanceFromSafeZone:
+                  distance,
+              },
+              { merge: true }
+            )
+
+            setMessage(
+              'Live location updated.'
+            )
+          } catch (err) {
+            setError(err.message)
+          }
+        },
+        (err) => {
           setError(err.message)
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 20000,
         }
-      },
-      (err) => {
-        setError(err.message)
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 20000,
-      }
-    )
+      )
 
     setTracking(true)
   }
 
   function stopLocationTracking() {
     if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current)
+      navigator.geolocation.clearWatch(
+        watchIdRef.current
+      )
+
       watchIdRef.current = null
     }
 
     setTracking(false)
-    setMessage('Live location stopped.')
+    setMessage(
+      'Live location stopped.'
+    )
   }
 
-  async function setSafeZoneAtLocation(position) {
-    if (!familyCode || role !== 'parent') return
+  async function setSafeZoneAtLocation(
+    position
+  ) {
+    if (!familyCode || role !== 'parent') {
+      return
+    }
 
     try {
       const newSafeZone = {
@@ -605,28 +697,43 @@ export default function App() {
         radius: SAFE_ZONE_RADIUS,
       })
 
-      setMessage('Safe Zone saved successfully.')
+      setMessage(
+        'Safe Zone saved successfully.'
+      )
     } catch (err) {
       setError(err.message)
     }
   }
 
   async function requestNotificationPermission() {
-    if (typeof Notification === 'undefined') {
-      setError('Notifications are not supported by this browser.')
+    if (
+      typeof Notification ===
+      'undefined'
+    ) {
+      setError(
+        'Notifications are not supported by this browser.'
+      )
       return
     }
 
     try {
-      const permission = await Notification.requestPermission()
+      const permission =
+        await Notification.requestPermission()
 
       setNotificationPermission(permission)
 
       if (permission === 'granted') {
         await registerForPushNotifications()
-        setMessage('Notifications enabled.')
-      } else if (permission === 'denied') {
-        setError('Notification permission was blocked.')
+
+        setMessage(
+          'Notifications enabled.'
+        )
+      } else if (
+        permission === 'denied'
+      ) {
+        setError(
+          'Notification permission was blocked.'
+        )
       }
     } catch (err) {
       setError(err.message)
@@ -635,28 +742,51 @@ export default function App() {
 
   async function registerForPushNotifications() {
     try {
-      if (typeof Notification === 'undefined') return
-      if (Notification.permission !== 'granted') return
-
-      const messagingInstance = await messaging
-
-      if (!messagingInstance) {
-        console.log('Firebase Messaging is not supported.')
+      if (
+        typeof Notification ===
+        'undefined'
+      ) {
         return
       }
+
+      if (
+        Notification.permission !==
+        'granted'
+      ) {
+        return
+      }
+
+      const supported =
+        await isSupported()
+
+      if (!supported) {
+        console.log(
+          'Firebase Messaging is not supported.'
+        )
+        return
+      }
+
+      const messagingInstance =
+        getMessaging()
 
       const registration =
         await navigator.serviceWorker.register(
           '/familytrack/firebase-messaging-sw.js'
         )
 
-      const token = await getToken(messagingInstance, {
-        vapidKey: VAPID_KEY,
-        serviceWorkerRegistration: registration,
-      })
+      const token = await getToken(
+        messagingInstance,
+        {
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration:
+            registration,
+        }
+      )
 
       if (!token) {
-        console.log('No FCM registration token available.')
+        console.log(
+          'No FCM registration token available.'
+        )
         return
       }
 
@@ -667,28 +797,41 @@ export default function App() {
 
       setFcmReady(true)
 
-      console.log('FCM token:', token)
+      console.log(
+        'FCM token:',
+        token
+      )
     } catch (err) {
-      console.error('FCM registration error:', err)
+      console.error(
+        'FCM registration error:',
+        err
+      )
+
       setFcmReady(false)
     }
   }
 
-  function sendParentNotification(child) {
+  function sendParentNotification(
+    child
+  ) {
     if (
-      typeof Notification === 'undefined' ||
-      Notification.permission !== 'granted'
+      typeof Notification ===
+        'undefined' ||
+      Notification.permission !==
+        'granted'
     ) {
       return
     }
 
     const name =
-      child.email ||
-      'Your child'
+      child.email || 'Your child'
 
-    new Notification('FamilyTrack Alert', {
-      body: `${name} has left the Safe Zone.`,
-    })
+    new Notification(
+      'FamilyTrack Alert',
+      {
+        body: `${name} has left the Safe Zone.`,
+      }
+    )
   }
 
   async function logout() {
@@ -718,10 +861,13 @@ export default function App() {
     return (
       <div style={styles.page}>
         <div style={styles.authCard}>
-          <h1 style={styles.logo}>🏠 FamilyTrack</h1>
+          <h1 style={styles.logo}>
+            🏠 FamilyTrack
+          </h1>
 
           <p style={styles.subtitle}>
-            Family safety and location tracking
+            Family safety and location
+            tracking
           </p>
 
           <input
@@ -729,7 +875,9 @@ export default function App() {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
           />
 
           <input
@@ -737,18 +885,28 @@ export default function App() {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
           />
 
-          <button style={styles.primaryButton} onClick={login}>
+          <button
+            style={styles.primaryButton}
+            onClick={login}
+          >
             Login
           </button>
 
-          <button style={styles.secondaryButton} onClick={register}>
+          <button
+            style={styles.secondaryButton}
+            onClick={register}
+          >
             Create Account
           </button>
 
-          <div style={styles.divider}>OR</div>
+          <div style={styles.divider}>
+            OR
+          </div>
 
           <button
             style={styles.googleButton}
@@ -794,7 +952,9 @@ export default function App() {
             👨‍👩‍👧 Create Family
           </button>
 
-          <div style={styles.divider}>OR</div>
+          <div style={styles.divider}>
+            OR
+          </div>
 
           <input
             style={styles.input}
@@ -844,17 +1004,24 @@ export default function App() {
             onLogout={logout}
           />
 
-          <h2>👦 Child Dashboard</h2>
+          <h2>
+            👦 Child Dashboard
+          </h2>
 
           <div style={styles.infoCard}>
-            <strong>Family Code</strong>
+            <strong>
+              Family Code
+            </strong>
+
             <div style={styles.code}>
               {familyCode}
             </div>
           </div>
 
           <div style={styles.infoCard}>
-            <strong>Location Sharing</strong>
+            <strong>
+              Location Sharing
+            </strong>
 
             <p>
               {tracking
@@ -865,14 +1032,18 @@ export default function App() {
             {!tracking ? (
               <button
                 style={styles.primaryButton}
-                onClick={startLocationTracking}
+                onClick={
+                  startLocationTracking
+                }
               >
                 📍 Start Live Location
               </button>
             ) : (
               <button
                 style={styles.dangerButton}
-                onClick={stopLocationTracking}
+                onClick={
+                  stopLocationTracking
+                }
               >
                 Stop Live Location
               </button>
@@ -880,43 +1051,72 @@ export default function App() {
           </div>
 
           <div style={styles.infoCard}>
-            <strong>Safe Zone</strong>
+            <strong>
+              Safe Zone
+            </strong>
 
-            {safeZoneStatus === 'inside' && (
-              <p style={styles.insideText}>
-                🟢 You are inside the Safe Zone.
+            {safeZoneStatus ===
+              'inside' && (
+              <p
+                style={
+                  styles.insideText
+                }
+              >
+                🟢 You are inside the
+                Safe Zone.
               </p>
             )}
 
-            {safeZoneStatus === 'outside' && (
-              <p style={styles.outsideText}>
-                🔴 You are outside the Safe Zone.
+            {safeZoneStatus ===
+              'outside' && (
+              <p
+                style={
+                  styles.outsideText
+                }
+              >
+                🔴 You are outside the
+                Safe Zone.
               </p>
             )}
 
-            {distanceFromSafeZone !== null && (
+            {distanceFromSafeZone !==
+              null && (
               <p>
                 Distance from Safe Zone:{' '}
-                {Math.round(distanceFromSafeZone)} meters
+                {Math.round(
+                  distanceFromSafeZone
+                )}{' '}
+                meters
               </p>
             )}
           </div>
 
           {location && (
             <div style={styles.infoCard}>
-              <strong>Current Location</strong>
+              <strong>
+                Current Location
+              </strong>
 
               <p>
-                Latitude: {location.latitude.toFixed(6)}
+                Latitude:{' '}
+                {location.latitude.toFixed(
+                  6
+                )}
               </p>
 
               <p>
-                Longitude: {location.longitude.toFixed(6)}
+                Longitude:{' '}
+                {location.longitude.toFixed(
+                  6
+                )}
               </p>
 
               <p>
                 Accuracy:{' '}
-                {Math.round(location.accuracy || 0)} meters
+                {Math.round(
+                  location.accuracy || 0
+                )}{' '}
+                meters
               </p>
             </div>
           )}
@@ -945,11 +1145,16 @@ export default function App() {
           onLogout={logout}
         />
 
-        <h2>👨‍👩‍👧 Parent Dashboard</h2>
+        <h2>
+          👨‍👩‍👧 Parent Dashboard
+        </h2>
 
         <div style={styles.statsGrid}>
           <div style={styles.statCard}>
-            <strong>{children.length}</strong>
+            <strong>
+              {children.length}
+            </strong>
+
             <span>Children</span>
           </div>
 
@@ -958,61 +1163,99 @@ export default function App() {
               {
                 children.filter(
                   (child) =>
-                    typeof child.latitude === 'number'
+                    typeof child.latitude ===
+                    'number'
                 ).length
               }
             </strong>
-            <span>Locations shared</span>
+
+            <span>
+              Locations shared
+            </span>
           </div>
         </div>
 
         <div style={styles.infoCard}>
-          <h3>Your Family Code</h3>
+          <h3>
+            Your Family Code
+          </h3>
 
-          <div style={styles.familyCode}>
+          <div
+            style={
+              styles.familyCode
+            }
+          >
             {familyCode}
           </div>
 
           <p>
-            Give this code to your children.
+            Give this code to your
+            children.
           </p>
         </div>
 
         <div style={styles.infoCard}>
-          <h3>🔔 Parent Alerts</h3>
+          <h3>
+            🔔 Parent Alerts
+          </h3>
 
-          {notificationPermission === 'denied' ? (
-            <p style={styles.outsideText}>
-              🔴 Browser notifications are blocked.
+          {notificationPermission ===
+          'denied' ? (
+            <p
+              style={
+                styles.outsideText
+              }
+            >
+              🔴 Browser notifications
+              are blocked.
             </p>
           ) : fcmReady ? (
-            <p style={styles.insideText}>
-              🟢 Push notifications are ready on this
-              device.
+            <p
+              style={
+                styles.insideText
+              }
+            >
+              🟢 Push notifications are
+              ready on this device.
             </p>
-          ) : notificationPermission === 'granted' ? (
+          ) : notificationPermission ===
+            'granted' ? (
             <>
-              <p style={styles.insideText}>
-                🟢 Browser notifications are enabled.
+              <p
+                style={
+                  styles.insideText
+                }
+              >
+                🟢 Browser notifications
+                are enabled.
               </p>
 
               <button
-                style={styles.secondaryButton}
-                onClick={registerForPushNotifications}
+                style={
+                  styles.secondaryButton
+                }
+                onClick={
+                  registerForPushNotifications
+                }
               >
-                Activate Push Notifications
+                Activate Push
+                Notifications
               </button>
             </>
           ) : (
             <>
               <p>
-                Enable notifications to receive Safe
-                Zone alerts.
+                Enable notifications to
+                receive Safe Zone alerts.
               </p>
 
               <button
-                style={styles.primaryButton}
-                onClick={requestNotificationPermission}
+                style={
+                  styles.primaryButton
+                }
+                onClick={
+                  requestNotificationPermission
+                }
               >
                 🔔 Enable Notifications
               </button>
@@ -1021,7 +1264,9 @@ export default function App() {
         </div>
 
         <div style={styles.infoCard}>
-          <h3>🟢 Safe Zone</h3>
+          <h3>
+            🟢 Safe Zone
+          </h3>
 
           {safeZone ? (
             <>
@@ -1030,7 +1275,8 @@ export default function App() {
               </p>
 
               <p>
-                Radius: {SAFE_ZONE_RADIUS} meters
+                Radius:{' '}
+                {SAFE_ZONE_RADIUS} meters
               </p>
 
               <MapContainer
@@ -1042,7 +1288,7 @@ export default function App() {
                 scrollWheelZoom={true}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
+                  attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -1051,11 +1297,15 @@ export default function App() {
                     safeZone.latitude,
                     safeZone.longitude,
                   ]}
-                  radius={SAFE_ZONE_RADIUS}
+                  radius={
+                    SAFE_ZONE_RADIUS
+                  }
                 />
 
                 <SafeZonePicker
-                  onPick={setSafeZoneAtLocation}
+                  onPick={
+                    setSafeZoneAtLocation
+                  }
                 />
 
                 {children.map(
@@ -1070,7 +1320,9 @@ export default function App() {
                           child.latitude,
                           child.longitude,
                         ]}
-                        icon={childIcon}
+                        icon={
+                          childIcon
+                        }
                       >
                         <Popup>
                           <strong>
@@ -1082,7 +1334,8 @@ export default function App() {
 
                           Accuracy:{' '}
                           {Math.round(
-                            child.accuracy || 0
+                            child.accuracy ||
+                              0
                           )}{' '}
                           meters
 
@@ -1098,9 +1351,13 @@ export default function App() {
                 )}
               </MapContainer>
 
-              <p style={styles.mapHint}>
-                Click anywhere on the map to move the
-                Safe Zone.
+              <p
+                style={
+                  styles.mapHint
+                }
+              >
+                Click anywhere on the map
+                to move the Safe Zone.
               </p>
             </>
           ) : (
@@ -1110,8 +1367,8 @@ export default function App() {
               </p>
 
               <p>
-                Click on the map below to create a
-                100-meter Safe Zone.
+                Click on the map below to
+                create a 100-meter Safe Zone.
               </p>
 
               <MapContainer
@@ -1120,12 +1377,14 @@ export default function App() {
                 scrollWheelZoom={true}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
+                  attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
                 <SafeZonePicker
-                  onPick={setSafeZoneAtLocation}
+                  onPick={
+                    setSafeZoneAtLocation
+                  }
                 />
               </MapContainer>
             </>
@@ -1133,7 +1392,9 @@ export default function App() {
         </div>
 
         <div style={styles.infoCard}>
-          <h3>👨‍👩‍👧 Children</h3>
+          <h3>
+            👨‍👩‍👧 Children
+          </h3>
 
           {children.length === 0 ? (
             <p>
@@ -1143,30 +1404,43 @@ export default function App() {
             children.map((child) => (
               <div
                 key={child.id}
-                style={styles.childCard}
+                style={
+                  styles.childCard
+                }
               >
                 <strong>
-                  {child.email || 'Child'}
+                  {child.email ||
+                    'Child'}
                 </strong>
 
                 <p>
                   {typeof child.latitude ===
-                    'number'
+                  'number'
                     ? '📍 Location available'
                     : '⚪ No location yet'}
                 </p>
 
                 {child.safeZoneStatus ===
                   'outside' && (
-                  <p style={styles.outsideText}>
-                    🔴 Child is outside the Safe Zone
+                  <p
+                    style={
+                      styles.outsideText
+                    }
+                  >
+                    🔴 Child is outside
+                    the Safe Zone
                   </p>
                 )}
 
                 {child.safeZoneStatus ===
                   'inside' && (
-                  <p style={styles.insideText}>
-                    🟢 Child is inside the Safe Zone
+                  <p
+                    style={
+                      styles.insideText
+                    }
+                  >
+                    🟢 Child is inside
+                    the Safe Zone
                   </p>
                 )}
 
@@ -1244,7 +1518,8 @@ const styles = {
     padding: '30px',
     background: '#ffffff',
     borderRadius: '20px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+    boxShadow:
+      '0 10px 30px rgba(0,0,0,0.08)',
   },
 
   card: {
@@ -1253,7 +1528,8 @@ const styles = {
     padding: '30px',
     background: '#ffffff',
     borderRadius: '20px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+    boxShadow:
+      '0 10px 30px rgba(0,0,0,0.08)',
   },
 
   dashboard: {
@@ -1390,7 +1666,8 @@ const styles = {
     padding: '20px',
     borderRadius: '16px',
     marginBottom: '15px',
-    boxShadow: '0 3px 12px rgba(0,0,0,0.04)',
+    boxShadow:
+      '0 3px 12px rgba(0,0,0,0.04)',
   },
 
   familyCode: {
