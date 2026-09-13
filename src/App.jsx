@@ -116,8 +116,18 @@ function App() {
   const [settingSafeZone, setSettingSafeZone] =
     useState(false)
 
+  const [notificationPermission, setNotificationPermission] =
+    useState(
+      typeof Notification !== 'undefined'
+        ? Notification.permission
+        : 'unsupported'
+    )
+
   const watchIdRef = useRef(null)
   const lastSavedRef = useRef(0)
+
+  // يتذكر آخر حالة لكل طفل لمنع تكرار التنبيه
+  const previousChildStatusRef = useRef({})
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
@@ -139,6 +149,105 @@ function App() {
       }
     }
   }, [])
+
+  // طلب إذن إشعارات المتصفح
+  const requestNotificationPermission =
+    async () => {
+      if (
+        typeof Notification === 'undefined'
+      ) {
+        setMessage(
+          'Browser notifications are not supported on this device.'
+        )
+        return
+      }
+
+      if (
+        Notification.permission === 'granted'
+      ) {
+        setNotificationPermission('granted')
+        setMessage(
+          'Browser notifications are already enabled.'
+        )
+        return
+      }
+
+      if (
+        Notification.permission === 'denied'
+      ) {
+        setNotificationPermission('denied')
+        setMessage(
+          'Browser notifications are blocked. Please allow them from your browser settings.'
+        )
+        return
+      }
+
+      try {
+        const permission =
+          await Notification.requestPermission()
+
+        setNotificationPermission(
+          permission
+        )
+
+        if (permission === 'granted') {
+          setMessage(
+            '🔔 Browser notifications enabled.'
+          )
+        } else {
+          setMessage(
+            'Notifications were not enabled.'
+          )
+        }
+      } catch (error) {
+        setMessage(error.message)
+      }
+    }
+
+  // إرسال تنبيه للوالد
+  const sendParentNotification = (
+    child
+  ) => {
+    if (
+      typeof Notification === 'undefined'
+    ) {
+      return
+    }
+
+    if (
+      Notification.permission !==
+      'granted'
+    ) {
+      return
+    }
+
+    const distance =
+      typeof child.distanceFromSafeZone ===
+      'number'
+        ? Math.round(
+            child.distanceFromSafeZone
+          )
+        : null
+
+    const body = distance
+      ? `Child is ${distance} meters outside the Safe Zone.`
+      : 'Child is outside the Safe Zone.'
+
+    try {
+      new Notification(
+        '🚨 FamilyTrack Alert',
+        {
+          body,
+          icon: '/familytrack/favicon.ico',
+        }
+      )
+    } catch (error) {
+      console.error(
+        'Notification error:',
+        error
+      )
+    }
+  }
 
   // Find family
   useEffect(() => {
@@ -260,7 +369,7 @@ function App() {
     return unsubscribe
   }, [user, familyCode])
 
-  // Live children updates
+  // Live children updates + alerts
   useEffect(() => {
     if (
       !user ||
@@ -268,6 +377,7 @@ function App() {
       !familyCode
     ) {
       setChildren([])
+      previousChildStatusRef.current = {}
       return
     }
 
@@ -290,6 +400,46 @@ function App() {
           )
 
         setChildren(childList)
+
+        // فحص حالات Safe Zone الجديدة
+        childList.forEach((child) => {
+          const currentStatus =
+            child.safeZoneStatus
+
+          const previousStatus =
+            previousChildStatusRef.current[
+              child.id
+            ]
+
+          // أول مرة نرى الطفل: نحفظ الحالة فقط
+          if (
+            previousStatus === undefined
+          ) {
+            previousChildStatusRef.current[
+              child.id
+            ] = currentStatus
+
+            return
+          }
+
+          // إذا انتقل من داخل/غير معروف إلى خارج
+          if (
+            currentStatus === 'outside' &&
+            previousStatus !== 'outside'
+          ) {
+            setMessage(
+              `🚨 ALERT: ${child.email} is outside the Safe Zone!`
+            )
+
+            sendParentNotification(
+              child
+            )
+          }
+
+          previousChildStatusRef.current[
+            child.id
+          ] = currentStatus
+        })
       },
       (error) => {
         setMessage(error.message)
@@ -823,6 +973,7 @@ function App() {
     setChildren([])
     setSafeZone(null)
     setMessage('')
+    previousChildStatusRef.current = {}
   }
 
   const styles = {
@@ -1080,6 +1231,21 @@ function App() {
       marginTop: '12px',
       border:
         '1px solid #fecaca',
+    },
+
+    notificationBox: {
+      padding: '16px',
+      borderRadius: '16px',
+      background: '#fff7ed',
+      border:
+        '1px solid #fed7aa',
+      marginBottom: '22px',
+    },
+
+    notificationTitle: {
+      fontWeight: 'bold',
+      color: '#9a3412',
+      marginBottom: '7px',
     },
 
     noLocation: {
@@ -1494,6 +1660,71 @@ function App() {
                       code to your
                       children
                     </div>
+                  </div>
+
+                  <div
+                    style={
+                      styles.notificationBox
+                    }
+                  >
+                    <div
+                      style={
+                        styles.notificationTitle
+                      }
+                    >
+                      🔔 Parent Alerts
+                    </div>
+
+                    {notificationPermission ===
+                    'granted' ? (
+                      <div
+                        style={{
+                          color:
+                            '#166534',
+                          fontWeight:
+                            'bold',
+                        }}
+                      >
+                        🟢 Browser notifications
+                        are enabled.
+                      </div>
+                    ) : notificationPermission ===
+                      'denied' ? (
+                      <div
+                        style={{
+                          color:
+                            '#991b1b',
+                        }}
+                      >
+                        🔴 Notifications are
+                        blocked by your browser.
+                      </div>
+                    ) : (
+                      <>
+                        <p
+                          style={{
+                            color:
+                              '#7c2d12',
+                            marginTop: 0,
+                          }}
+                        >
+                          Enable notifications to
+                          receive an alert when a
+                          child leaves the Safe Zone.
+                        </p>
+
+                        <button
+                          style={
+                            styles.button
+                          }
+                          onClick={
+                            requestNotificationPermission
+                          }
+                        >
+                          🔔 Enable Alerts
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   <div
