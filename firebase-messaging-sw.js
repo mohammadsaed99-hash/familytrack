@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCKtz9__6kCwyrh-Mhh5wD06zW_6L-64",
+  apiKey: "AIzaSyCKtz_9__6kCwyrh-Mhh5wD06zW_6L-64",
   authDomain: "familytrack-c42bf.firebaseapp.com",
   projectId: "familytrack-c42bf",
   storageBucket: "familytrack-c42bf.firebasestorage.app",
@@ -18,6 +18,7 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export const messagingSupported = isSupported();
+
 export const messaging = messagingSupported.then((supported) => {
   if (!supported) return null;
   return getMessaging(app);
