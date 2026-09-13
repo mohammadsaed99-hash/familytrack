@@ -44,6 +44,8 @@ const VAPID_KEY =
   'BEYnLQTQeaIbsVU6q1V5jLvXDOurQNOovshiLAhFv82QfYYkY-bp3XOMIK3uFvW-nVhHXccuDnDGtf7alSEqFHw'
 
 const SAFE_ZONE_RADIUS = 100
+const NOTIFICATION_WORKER_URL =
+  'https://familytrack-notifications.mohammad-saed99.workers.dev'
 
 const defaultCenter = [31.9539, 35.9106]
 
