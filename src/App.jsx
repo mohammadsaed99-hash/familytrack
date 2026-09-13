@@ -180,13 +180,10 @@ export default function App() {
         : 'default'
     )
 
-  const [fcmReady, setFcmReady] =
-    useState(false)
+  const [fcmReady, setFcmReady] = useState(false)
 
   const watchIdRef = useRef(null)
-
-  const previousChildStatusRef =
-    useRef({})
+  const previousChildStatusRef = useRef({})
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
@@ -241,11 +238,7 @@ export default function App() {
               familyDoc.id,
               'members'
             ),
-            where(
-              '__name__',
-              '==',
-              currentUser.uid
-            )
+            where('__name__', '==', currentUser.uid)
           )
         )
 
@@ -275,10 +268,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (
-      !familyCode ||
-      role !== 'parent'
-    ) {
+    if (!familyCode || role !== 'parent') {
       return
     }
 
@@ -299,9 +289,7 @@ export default function App() {
             ...data,
           })
 
-          setSafeZone(
-            data.safeZone || null
-          )
+          setSafeZone(data.safeZone || null)
         }
       }
     )
@@ -316,12 +304,10 @@ export default function App() {
     const unsubscribeMembers = onSnapshot(
       membersRef,
       (snapshot) => {
-        const list = snapshot.docs.map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        )
+        const list = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
 
         setChildren(list)
       }
@@ -370,13 +356,11 @@ export default function App() {
           })
 
           setSafeZoneStatus(
-            data.safeZoneStatus ||
-              'unknown'
+            data.safeZoneStatus || 'unknown'
           )
 
           setDistanceFromSafeZone(
-            typeof data.distanceFromSafeZone ===
-              'number'
+            typeof data.distanceFromSafeZone === 'number'
               ? data.distanceFromSafeZone
               : null
           )
@@ -388,10 +372,7 @@ export default function App() {
   }, [familyCode, role, user])
 
   useEffect(() => {
-    if (
-      !familyCode ||
-      role !== 'parent'
-    ) {
+    if (!familyCode || role !== 'parent') {
       return
     }
 
@@ -410,24 +391,18 @@ export default function App() {
           }
 
           const previousStatus =
-            previousChildStatusRef.current[
-              child.id
-            ]
+            previousChildStatusRef.current[child.id]
 
           if (
-            child.safeZoneStatus ===
-              'outside' &&
+            child.safeZoneStatus === 'outside' &&
             previousStatus &&
             previousStatus !== 'outside'
           ) {
             sendParentNotification(child)
           }
 
-          previousChildStatusRef.current[
-            child.id
-          ] =
-            child.safeZoneStatus ||
-            'unknown'
+          previousChildStatusRef.current[child.id] =
+            child.safeZoneStatus || 'unknown'
         })
       }
     )
@@ -438,8 +413,7 @@ export default function App() {
   useEffect(() => {
     if (
       role === 'parent' &&
-      notificationPermission ===
-        'granted'
+      notificationPermission === 'granted'
     ) {
       registerForPushNotifications()
     }
@@ -452,9 +426,7 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (
-        watchIdRef.current !== null
-      ) {
+      if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(
           watchIdRef.current
         )
@@ -545,7 +517,9 @@ export default function App() {
   }
 
   async function createFamily() {
-    if (!user) return
+    if (!user) {
+      return
+    }
 
     setError('')
     setMessage('')
@@ -560,22 +534,18 @@ export default function App() {
         doc(db, 'families', code),
         {
           parentId: user.uid,
-          parentEmail:
-            user.email || '',
-          createdAt:
-            serverTimestamp(),
+          parentEmail: user.email || '',
+          createdAt: serverTimestamp(),
         }
       )
 
       setFamilyCode(code)
-
       setRole('parent')
 
       setFamilyData({
         id: code,
         parentId: user.uid,
-        parentEmail:
-          user.email || '',
+        parentEmail: user.email || '',
       })
 
       setMessage(
@@ -596,26 +566,17 @@ export default function App() {
 
     try {
       const code =
-        joinCode
-          .trim()
-          .toUpperCase()
+        joinCode.trim().toUpperCase()
 
-      const familySnapshot =
-        await getDocs(
-          query(
-            collection(db, 'families'),
-            where(
-              '__name__',
-              '==',
-              code
-            )
-          )
+      const familySnapshot = await getDocs(
+        query(
+          collection(db, 'families'),
+          where('__name__', '==', code)
         )
+      )
 
       if (familySnapshot.empty) {
-        setError(
-          'Family code not found.'
-        )
+        setError('Family code not found.')
         return
       }
 
@@ -629,11 +590,9 @@ export default function App() {
 
       await setDoc(memberRef, {
         userId: user.uid,
-        email:
-          user.email || '',
+        email: user.email || '',
         role: 'child',
-        joinedAt:
-          serverTimestamp(),
+        joinedAt: serverTimestamp(),
       })
 
       const familyDataSnapshot =
@@ -671,14 +630,11 @@ export default function App() {
       return
     }
 
-    if (
-      watchIdRef.current !== null
-    ) {
+    if (watchIdRef.current !== null) {
       return
     }
 
     setError('')
-
     setMessage(
       'Starting live location...'
     )
@@ -690,10 +646,7 @@ export default function App() {
         async (position) => {
           const now = Date.now()
 
-          if (
-            now - lastSent <
-            30000
-          ) {
+          if (now - lastSent < 30000) {
             return
           }
 
@@ -719,60 +672,50 @@ export default function App() {
 
           if (
             safeZone &&
-            typeof safeZone.latitude ===
-              'number' &&
-            typeof safeZone.longitude ===
-              'number'
+            typeof safeZone.latitude === 'number' &&
+            typeof safeZone.longitude === 'number'
           ) {
-            distance =
-              calculateDistance(
-                latitude,
-                longitude,
-                safeZone.latitude,
-                safeZone.longitude
-              )
+            distance = calculateDistance(
+              latitude,
+              longitude,
+              safeZone.latitude,
+              safeZone.longitude
+            )
 
             if (accuracy > 50) {
               status = 'unknown'
             } else {
               status =
-                distance <=
-                SAFE_ZONE_RADIUS
+                distance <= SAFE_ZONE_RADIUS
                   ? 'inside'
                   : 'outside'
             }
           }
 
           setSafeZoneStatus(status)
-
-          setDistanceFromSafeZone(
-            distance
-          )
+          setDistanceFromSafeZone(distance)
 
           try {
-            const memberRef =
-              doc(
-                db,
-                'families',
-                familyCode,
-                'members',
-                user.uid
-              )
+            const memberRef = doc(
+              db,
+              'families',
+              familyCode,
+              'members',
+              user.uid
+            )
 
             await setDoc(
               memberRef,
               {
                 userId: user.uid,
-                email:
-                  user.email || '',
+                email: user.email || '',
                 role: 'child',
                 latitude,
                 longitude,
                 accuracy,
                 locationUpdatedAt:
                   serverTimestamp(),
-                safeZoneStatus:
-                  status,
+                safeZoneStatus: status,
                 distanceFromSafeZone:
                   distance,
               },
@@ -785,15 +728,11 @@ export default function App() {
               'Live location updated.'
             )
           } catch (err) {
-            setError(
-              err.message
-            )
+            setError(err.message)
           }
         },
         (err) => {
-          setError(
-            err.message
-          )
+          setError(err.message)
         },
         {
           enableHighAccuracy: true,
@@ -806,10 +745,7 @@ export default function App() {
   }
 
   function stopLocationTracking() {
-    if (
-      watchIdRef.current !==
-      null
-    ) {
+    if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(
         watchIdRef.current
       )
@@ -836,14 +772,10 @@ export default function App() {
 
     try {
       const newSafeZone = {
-        latitude:
-          position.latitude,
-        longitude:
-          position.longitude,
-        radius:
-          SAFE_ZONE_RADIUS,
-        updatedAt:
-          serverTimestamp(),
+        latitude: position.latitude,
+        longitude: position.longitude,
+        radius: SAFE_ZONE_RADIUS,
+        updatedAt: serverTimestamp(),
       }
 
       await updateDoc(
@@ -853,18 +785,14 @@ export default function App() {
           familyCode
         ),
         {
-          safeZone:
-            newSafeZone,
+          safeZone: newSafeZone,
         }
       )
 
       setSafeZone({
-        latitude:
-          position.latitude,
-        longitude:
-          position.longitude,
-        radius:
-          SAFE_ZONE_RADIUS,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        radius: SAFE_ZONE_RADIUS,
       })
 
       setMessage(
@@ -877,8 +805,7 @@ export default function App() {
 
   async function requestNotificationPermission() {
     if (
-      typeof Notification ===
-      'undefined'
+      typeof Notification === 'undefined'
     ) {
       setError(
         'Notifications are not supported by this browser.'
@@ -890,23 +817,15 @@ export default function App() {
       const permission =
         await Notification.requestPermission()
 
-      setNotificationPermission(
-        permission
-      )
+      setNotificationPermission(permission)
 
-      if (
-        permission ===
-        'granted'
-      ) {
+      if (permission === 'granted') {
         await registerForPushNotifications()
 
         setMessage(
           'Notifications enabled.'
         )
-      } else if (
-        permission ===
-        'denied'
-      ) {
+      } else if (permission === 'denied') {
         setError(
           'Notification permission was blocked.'
         )
@@ -919,15 +838,13 @@ export default function App() {
   async function registerForPushNotifications() {
     try {
       if (
-        typeof Notification ===
-        'undefined'
+        typeof Notification === 'undefined'
       ) {
         return
       }
 
       if (
-        Notification.permission !==
-        'granted'
+        Notification.permission !== 'granted'
       ) {
         return
       }
@@ -958,16 +875,14 @@ export default function App() {
           '/familytrack/firebase-messaging-sw.js'
         )
 
-      const token =
-        await getToken(
-          messagingInstance,
-          {
-            vapidKey:
-              VAPID_KEY,
-            serviceWorkerRegistration:
-              registration,
-          }
-        )
+      const token = await getToken(
+        messagingInstance,
+        {
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration:
+            registration,
+        }
+      )
 
       if (!token) {
         console.log(
@@ -988,8 +903,7 @@ export default function App() {
           familyCode
         ),
         {
-          parentFcmToken:
-            token,
+          parentFcmToken: token,
           parentFcmTokenUpdatedAt:
             serverTimestamp(),
         },
@@ -1018,9 +932,7 @@ export default function App() {
     }
   }
 
-  async function sendParentNotification(
-    child
-  ) {
+  async function sendParentNotification(child) {
     try {
       const token =
         localStorage.getItem(
@@ -1036,26 +948,23 @@ export default function App() {
       }
 
       const name =
-        child.email ||
-        'Your child'
+        child.email || 'Your child'
 
-      const response =
-        await fetch(
-          NOTIFICATION_WORKER_URL,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              token,
-              title:
-                'FamilyTrack Alert',
-              body: `${name} has left the Safe Zone.`,
-            }),
-          }
-        )
+      const response = await fetch(
+        NOTIFICATION_WORKER_URL,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            title: 'FamilyTrack Alert',
+            body: `${name} has left the Safe Zone.`,
+          }),
+        }
+      )
 
       const result =
         await response.json()
@@ -1100,11 +1009,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div
-        style={
-          styles.centerScreen
-        }
-      >
+      <div style={styles.centerScreen}>
         <h2>FamilyTrack</h2>
         <p>Loading...</p>
       </div>
@@ -1114,26 +1019,13 @@ export default function App() {
   if (!user) {
     return (
       <div style={styles.page}>
-        <div
-          style={
-            styles.authCard
-          }
-        >
-          <h1
-            style={
-              styles.logo
-            }
-          >
+        <div style={styles.authCard}>
+          <h1 style={styles.logo}>
             🏠 FamilyTrack
           </h1>
 
-          <p
-            style={
-              styles.subtitle
-            }
-          >
-            Family safety and
-            location tracking
+          <p style={styles.subtitle}>
+            Family safety and location tracking
           </p>
 
           <input
@@ -1142,9 +1034,7 @@ export default function App() {
             placeholder="Email"
             value={email}
             onChange={(e) =>
-              setEmail(
-                e.target.value
-              )
+              setEmail(e.target.value)
             }
           />
 
@@ -1154,65 +1044,43 @@ export default function App() {
             placeholder="Password"
             value={password}
             onChange={(e) =>
-              setPassword(
-                e.target.value
-              )
+              setPassword(e.target.value)
             }
           />
 
           <button
-            style={
-              styles.primaryButton
-            }
+            style={styles.primaryButton}
             onClick={login}
           >
             Login
           </button>
 
           <button
-            style={
-              styles.secondaryButton
-            }
+            style={styles.secondaryButton}
             onClick={register}
           >
             Create Account
           </button>
 
-          <div
-            style={
-              styles.divider
-            }
-          >
+          <div style={styles.divider}>
             OR
           </div>
 
           <button
-            style={
-              styles.googleButton
-            }
-            onClick={
-              loginWithGoogle
-            }
+            style={styles.googleButton}
+            onClick={loginWithGoogle}
           >
             Continue with Google
           </button>
 
           {error && (
-            <div
-              style={
-                styles.errorBox
-              }
-            >
+            <div style={styles.errorBox}>
               {error}
             </div>
           )}
 
           {message && (
-            <div
-              style={
-                styles.successBox
-              }
-            >
+            <div style={styles.successBox}>
               {message}
             </div>
           )}
@@ -1224,44 +1092,27 @@ export default function App() {
   if (!role) {
     return (
       <div style={styles.page}>
-        <div
-          style={
-            styles.card
-          }
-        >
-          <h1>
-            🏠 FamilyTrack
-          </h1>
+        <div style={styles.card}>
+          <h1>🏠 FamilyTrack</h1>
 
           <p>
             Logged in as:
             <br />
-
             <strong>
               {user.email}
             </strong>
           </p>
 
-          <h2>
-            Choose your role
-          </h2>
+          <h2>Choose your role</h2>
 
           <button
-            style={
-              styles.primaryButton
-            }
-            onClick={
-              createFamily
-            }
+            style={styles.primaryButton}
+            onClick={createFamily}
           >
             👨‍👩‍👧 Create Family
           </button>
 
-          <div
-            style={
-              styles.divider
-            }
-          >
+          <div style={styles.divider}>
             OR
           </div>
 
@@ -1270,48 +1121,32 @@ export default function App() {
             placeholder="Enter Family Code"
             value={joinCode}
             onChange={(e) =>
-              setJoinCode(
-                e.target.value
-              )
+              setJoinCode(e.target.value)
             }
           />
 
           <button
-            style={
-              styles.secondaryButton
-            }
-            onClick={
-              joinFamily
-            }
+            style={styles.secondaryButton}
+            onClick={joinFamily}
           >
             👦 Join Family
           </button>
 
           <button
-            style={
-              styles.logoutButton
-            }
+            style={styles.logoutButton}
             onClick={logout}
           >
             Logout
           </button>
 
           {error && (
-            <div
-              style={
-                styles.errorBox
-              }
-            >
+            <div style={styles.errorBox}>
               {error}
             </div>
           )}
 
           {message && (
-            <div
-              style={
-                styles.successBox
-              }
-            >
+            <div style={styles.successBox}>
               {message}
             </div>
           )}
@@ -1323,11 +1158,7 @@ export default function App() {
   if (role === 'child') {
     return (
       <div style={styles.page}>
-        <div
-          style={
-            styles.dashboard
-          }
-        >
+        <div style={styles.dashboard}>
           <Header
             email={user.email}
             onLogout={logout}
@@ -1337,29 +1168,17 @@ export default function App() {
             👦 Child Dashboard
           </h2>
 
-          <div
-            style={
-              styles.infoCard
-            }
-          >
+          <div style={styles.infoCard}>
             <strong>
               Family Code
             </strong>
 
-            <div
-              style={
-                styles.code
-              }
-            >
+            <div style={styles.code}>
               {familyCode}
             </div>
           </div>
 
-          <div
-            style={
-              styles.infoCard
-            }
-          >
+          <div style={styles.infoCard}>
             <strong>
               Location Sharing
             </strong>
@@ -1372,9 +1191,7 @@ export default function App() {
 
             {!tracking ? (
               <button
-                style={
-                  styles.primaryButton
-                }
+                style={styles.primaryButton}
                 onClick={
                   startLocationTracking
                 }
@@ -1383,9 +1200,7 @@ export default function App() {
               </button>
             ) : (
               <button
-                style={
-                  styles.dangerButton
-                }
+                style={styles.dangerButton}
                 onClick={
                   stopLocationTracking
                 }
@@ -1395,44 +1210,26 @@ export default function App() {
             )}
           </div>
 
-          <div
-            style={
-              styles.infoCard
-            }
-          >
+          <div style={styles.infoCard}>
             <strong>
               Safe Zone
             </strong>
 
-            {safeZoneStatus ===
-              'inside' && (
-              <p
-                style={
-                  styles.insideText
-                }
-              >
-                🟢 You are inside the
-                Safe Zone.
+            {safeZoneStatus === 'inside' && (
+              <p style={styles.insideText}>
+                🟢 You are inside the Safe Zone.
               </p>
             )}
 
-            {safeZoneStatus ===
-              'outside' && (
-              <p
-                style={
-                  styles.outsideText
-                }
-              >
-                🔴 You are outside the
-                Safe Zone.
+            {safeZoneStatus === 'outside' && (
+              <p style={styles.outsideText}>
+                🔴 You are outside the Safe Zone.
               </p>
             )}
 
-            {distanceFromSafeZone !==
-              null && (
+            {distanceFromSafeZone !== null && (
               <p>
-                Distance from Safe
-                Zone:{' '}
+                Distance from Safe Zone:{' '}
                 {Math.round(
                   distanceFromSafeZone
                 )}{' '}
@@ -1442,34 +1239,25 @@ export default function App() {
           </div>
 
           {location && (
-            <div
-              style={
-                styles.infoCard
-              }
-            >
+            <div style={styles.infoCard}>
               <strong>
                 Current Location
               </strong>
 
               <p>
                 Latitude:{' '}
-                {location.latitude.toFixed(
-                  6
-                )}
+                {location.latitude.toFixed(6)}
               </p>
 
               <p>
                 Longitude:{' '}
-                {location.longitude.toFixed(
-                  6
-                )}
+                {location.longitude.toFixed(6)}
               </p>
 
               <p>
                 Accuracy:{' '}
                 {Math.round(
-                  location.accuracy ||
-                    0
+                  location.accuracy || 0
                 )}{' '}
                 meters
               </p>
@@ -1477,21 +1265,13 @@ export default function App() {
           )}
 
           {message && (
-            <div
-              style={
-                styles.successBox
-              }
-            >
+            <div style={styles.successBox}>
               {message}
             </div>
           )}
 
           {error && (
-            <div
-              style={
-                styles.errorBox
-              }
-            >
+            <div style={styles.errorBox}>
               {error}
             </div>
           )}
@@ -1502,11 +1282,7 @@ export default function App() {
 
   return (
     <div style={styles.page}>
-      <div
-        style={
-          styles.dashboard
-        }
-      >
+      <div style={styles.dashboard}>
         <Header
           email={user.email}
           onLogout={logout}
@@ -1516,16 +1292,8 @@ export default function App() {
           👨‍👩‍👧 Parent Dashboard
         </h2>
 
-        <div
-          style={
-            styles.statsGrid
-          }
-        >
-          <div
-            style={
-              styles.statCard
-            }
-          >
+        <div style={styles.statsGrid}>
+          <div style={styles.statCard}>
             <strong>
               {children.length}
             </strong>
@@ -1535,11 +1303,7 @@ export default function App() {
             </span>
           </div>
 
-          <div
-            style={
-              styles.statCard
-            }
-          >
+          <div style={styles.statCard}>
             <strong>
               {
                 children.filter(
@@ -1556,92 +1320,60 @@ export default function App() {
           </div>
         </div>
 
-        <div
-          style={
-            styles.infoCard
-          }
-        >
+        <div style={styles.infoCard}>
           <h3>
             Your Family Code
           </h3>
 
-          <div
-            style={
-              styles.familyCode
-            }
-          >
+          <div style={styles.familyCode}>
             {familyCode}
           </div>
 
           <p>
-            Give this code to your
-            children.
+            Give this code to your children.
           </p>
         </div>
 
-        <div
-          style={
-            styles.infoCard
-          }
-        >
+        <div style={styles.infoCard}>
           <h3>
             🔔 Parent Alerts
           </h3>
 
           {notificationPermission ===
           'denied' ? (
-            <p
-              style={
-                styles.outsideText
-              }
-            >
-              🔴 Browser notifications
-              are blocked.
+            <p style={styles.outsideText}>
+              🔴 Browser notifications are blocked.
             </p>
           ) : fcmReady ? (
-            <p
-              style={
-                styles.insideText
-              }
-            >
-              🟢 Push notifications are
-              ready on this device.
+            <p style={styles.insideText}>
+              🟢 Push notifications are ready on this
+              device.
             </p>
           ) : notificationPermission ===
             'granted' ? (
             <>
-              <p
-                style={
-                  styles.insideText
-                }
-              >
-                🟢 Browser notifications
-                are enabled.
+              <p style={styles.insideText}>
+                🟢 Browser notifications are enabled.
               </p>
 
               <button
-                style={
-                  styles.secondaryButton
-                }
+                style={styles.secondaryButton}
                 onClick={
                   registerForPushNotifications
                 }
               >
-                Activate Push
-                Notifications
+                Activate Push Notifications
               </button>
             </>
           ) : (
             <>
               <p>
-                Enable notifications to
-                receive Safe Zone alerts.
+                Enable notifications to receive Safe
+                Zone alerts.
               </p>
 
               <button
-                style={
-                  styles.primaryButton
-                }
+                style={styles.primaryButton}
                 onClick={
                   requestNotificationPermission
                 }
@@ -1652,11 +1384,7 @@ export default function App() {
           )}
         </div>
 
-        <div
-          style={
-            styles.infoCard
-          }
-        >
+        <div style={styles.infoCard}>
           <h3>
             🟢 Safe Zone
           </h3>
@@ -1669,8 +1397,7 @@ export default function App() {
 
               <p>
                 Radius:{' '}
-                {SAFE_ZONE_RADIUS}{' '}
-                meters
+                {SAFE_ZONE_RADIUS} meters
               </p>
 
               <MapContainer
@@ -1680,9 +1407,10 @@ export default function App() {
                 ]}
                 zoom={16}
                 scrollWheelZoom={true}
+                style={styles.map}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
+                  attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -1691,9 +1419,7 @@ export default function App() {
                     safeZone.latitude,
                     safeZone.longitude,
                   ]}
-                  radius={
-                    SAFE_ZONE_RADIUS
-                  }
+                  radius={SAFE_ZONE_RADIUS}
                 />
 
                 <SafeZonePicker
@@ -1703,9 +1429,7 @@ export default function App() {
                 />
 
                 <MapFocus
-                  child={
-                    selectedChild
-                  }
+                  child={selectedChild}
                 />
 
                 {children.map(
@@ -1743,8 +1467,7 @@ export default function App() {
 
                             Accuracy:{' '}
                             {Math.round(
-                              child.accuracy ||
-                                0
+                              child.accuracy || 0
                             )}{' '}
                             meters
 
@@ -1786,13 +1509,9 @@ export default function App() {
                 )}
               </MapContainer>
 
-              <p
-                style={
-                  styles.mapHint
-                }
-              >
-                Click anywhere on the map
-                to move the Safe Zone.
+              <p style={styles.mapHint}>
+                Click anywhere on the map to move the
+                Safe Zone.
               </p>
             </>
           ) : (
@@ -1802,17 +1521,18 @@ export default function App() {
               </p>
 
               <p>
-                Click on the map below to
-                create a 100-meter Safe Zone.
+                Click on the map below to create a
+                100-meter Safe Zone.
               </p>
 
               <MapContainer
                 center={defaultCenter}
                 zoom={12}
                 scrollWheelZoom={true}
+                style={styles.map}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
+                  attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -1826,11 +1546,7 @@ export default function App() {
           )}
         </div>
 
-        <div
-          style={
-            styles.infoCard
-          }
-        >
+        <div style={styles.infoCard}>
           <h3>
             👨‍👩‍👧 Children
           </h3>
@@ -1843,13 +1559,10 @@ export default function App() {
             children.map((child) => (
               <div
                 key={child.id}
-                style={
-                  styles.childCard
-                }
+                style={styles.childCard}
               >
                 <strong>
-                  {child.email ||
-                    'Child'}
+                  {child.email || 'Child'}
                 </strong>
 
                 <p>
@@ -1866,8 +1579,7 @@ export default function App() {
                       styles.outsideText
                     }
                   >
-                    🔴 Child is outside the
-                    Safe Zone
+                    🔴 Child is outside the Safe Zone
                   </p>
                 )}
 
@@ -1878,16 +1590,14 @@ export default function App() {
                       styles.insideText
                     }
                   >
-                    🟢 Child is inside the
-                    Safe Zone
+                    🟢 Child is inside the Safe Zone
                   </p>
                 )}
 
                 {child.safeZoneStatus ===
                   'unknown' && (
                   <p>
-                    ⚪ Location status
-                    unknown
+                    ⚪ Location status unknown
                   </p>
                 )}
 
@@ -1934,21 +1644,13 @@ export default function App() {
         </div>
 
         {message && (
-          <div
-            style={
-              styles.successBox
-            }
-          >
+          <div style={styles.successBox}>
             {message}
           </div>
         )}
 
         {error && (
-          <div
-            style={
-              styles.errorBox
-            }
-          >
+          <div style={styles.errorBox}>
             {error}
           </div>
         )}
@@ -1962,11 +1664,7 @@ function Header({
   onLogout,
 }) {
   return (
-    <div
-      style={
-        styles.header
-      }
-    >
+    <div style={styles.header}>
       <div>
         <h1
           style={{
@@ -1982,9 +1680,7 @@ function Header({
       </div>
 
       <button
-        style={
-          styles.logoutButton
-        }
+        style={styles.logoutButton}
         onClick={onLogout}
       >
         Logout
@@ -2134,8 +1830,7 @@ const styles = {
 
   header: {
     display: 'flex',
-    justifyContent:
-      'space-between',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: '15px',
     marginBottom: '25px',
@@ -2216,6 +1911,13 @@ const styles = {
   outsideText: {
     color: '#dc2626',
     fontWeight: 'bold',
+  },
+
+  map: {
+    width: '100%',
+    height: '450px',
+    borderRadius: '12px',
+    overflow: 'hidden',
   },
 
   mapHint: {
