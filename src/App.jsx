@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -9,7 +10,9 @@ import {
 } from 'firebase/auth'
 
 import {
+  collection,
   doc,
+  getDocs,
   getDoc,
   serverTimestamp,
   setDoc,
@@ -38,16 +41,50 @@ function App() {
   const [familyCode, setFamilyCode] = useState('')
   const [joinCode, setJoinCode] = useState('')
 
+  const [children, setChildren] = useState([])
+
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useState(() => {
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
     })
 
     return unsubscribe
-  })
+  }, [])
+
+  // Load children from Firestore
+  useEffect(() => {
+    if (!user || role !== 'parent' || !familyCode) {
+      setChildren([])
+      return
+    }
+
+    const loadChildren = async () => {
+      try {
+        const membersRef = collection(
+          db,
+          'families',
+          familyCode,
+          'members'
+        )
+
+        const snapshot = await getDocs(membersRef)
+
+        const childList = snapshot.docs.map((memberDoc) => ({
+          id: memberDoc.id,
+          ...memberDoc.data(),
+        }))
+
+        setChildren(childList)
+      } catch (error) {
+        setMessage(error.message)
+      }
+    }
+
+    loadChildren()
+  }, [user, role, familyCode])
 
   const handleEmailLogin = async () => {
     setMessage('')
@@ -201,6 +238,7 @@ function App() {
     setUser(null)
     setFamilyCode('')
     setJoinCode('')
+    setChildren([])
     setMessage('')
   }
 
@@ -306,6 +344,14 @@ function App() {
       paddingTop: '20px',
       borderTop: '1px solid #eee',
     },
+
+    childCard: {
+      padding: '15px',
+      marginBottom: '10px',
+      borderRadius: '12px',
+      background: '#f8fafc',
+      border: '1px solid #e2e8f0',
+    },
   }
 
   if (!role) {
@@ -313,6 +359,7 @@ function App() {
       <div style={styles.page}>
         <div style={styles.card}>
           <h1 style={styles.title}>FamilyTrack</h1>
+
           <p style={styles.subtitle}>
             Family safety and location tracking
           </p>
@@ -447,6 +494,29 @@ function App() {
                   Give this code to your child so they can
                   join your family.
                 </p>
+
+                <div style={styles.section}>
+                  <h2>Children</h2>
+
+                  {children.length === 0 ? (
+                    <p>
+                      No children have joined yet.
+                    </p>
+                  ) : (
+                    children.map((child) => (
+                      <div
+                        key={child.id}
+                        style={styles.childCard}
+                      >
+                        <strong>👦 Child</strong>
+
+                        <div style={{ marginTop: '6px' }}>
+                          {child.email}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </>
             )}
           </>
@@ -457,8 +527,8 @@ function App() {
             {!familyCode ? (
               <>
                 <p>
-                  Enter the Family Code given to you by your
-                  parent.
+                  Enter the Family Code given to you by
+                  your parent.
                 </p>
 
                 <input
@@ -482,15 +552,17 @@ function App() {
               </>
             ) : (
               <>
-                <p>You are connected to family:</p>
+                <p>
+                  You are connected to family:
+                </p>
 
                 <div style={styles.code}>
                   {familyCode}
                 </div>
 
                 <p>
-                  Your account is now registered as a child
-                  in this family.
+                  Your account is now registered as a
+                  child in this family.
                 </p>
               </>
             )}
