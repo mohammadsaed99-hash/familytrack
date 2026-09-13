@@ -18,9 +18,13 @@ import {
   setDoc,
 } from 'firebase/firestore'
 
-import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import {
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+} from 'react-leaflet'
 
 import { auth, db } from './firebase'
 
@@ -63,16 +67,16 @@ function App() {
     return unsubscribe
   }, [])
 
-  // Stop location tracking when leaving the app
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
+        navigator.geolocation.clearWatch(
+          watchIdRef.current
+        )
       }
     }
   }, [])
 
-  // Find existing family
   useEffect(() => {
     if (!user || !role) return
 
@@ -123,7 +127,6 @@ function App() {
     findFamily()
   }, [user, role])
 
-  // Load children
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
@@ -165,7 +168,11 @@ function App() {
 
     try {
       setLoading(true)
-      await signInWithEmailAndPassword(auth, email, password)
+      await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
       setMessage('Login successful!')
     } catch (error) {
       setMessage(error.message)
@@ -189,7 +196,13 @@ function App() {
 
     try {
       setLoading(true)
-      await createUserWithEmailAndPassword(auth, email, password)
+
+      await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+
       setMessage('Account created successfully!')
     } catch (error) {
       setMessage(error.message)
@@ -229,12 +242,15 @@ function App() {
 
       const code = generateFamilyCode()
 
-      await setDoc(doc(db, 'families', code), {
-        familyCode: code,
-        parentId: user.uid,
-        parentEmail: user.email,
-        createdAt: serverTimestamp(),
-      })
+      await setDoc(
+        doc(db, 'families', code),
+        {
+          familyCode: code,
+          parentId: user.uid,
+          parentEmail: user.email,
+          createdAt: serverTimestamp(),
+        }
+      )
 
       setFamilyCode(code)
       setMessage('Family created successfully!')
@@ -279,7 +295,13 @@ function App() {
       }
 
       await setDoc(
-        doc(db, 'families', code, 'members', user.uid),
+        doc(
+          db,
+          'families',
+          code,
+          'members',
+          user.uid
+        ),
         {
           userId: user.uid,
           email: user.email,
@@ -297,14 +319,11 @@ function App() {
     }
   }
 
-  // Save child's location
   const saveLocation = async (position) => {
     if (!user || !familyCode) return
 
     const now = Date.now()
 
-    // Save immediately the first time,
-    // then no more than once every 30 seconds.
     if (
       lastSavedRef.current !== 0 &&
       now - lastSavedRef.current < 30000
@@ -346,7 +365,6 @@ function App() {
     }
   }
 
-  // Start automatic tracking
   const handleStartTracking = () => {
     setMessage('')
 
@@ -361,13 +379,13 @@ function App() {
     }
 
     if (!navigator.geolocation) {
-      setMessage('Location is not supported by this browser.')
+      setMessage(
+        'Location is not supported by this browser.'
+      )
       return
     }
 
-    if (isTracking) {
-      return
-    }
+    if (isTracking) return
 
     setLoading(true)
 
@@ -376,29 +394,38 @@ function App() {
         try {
           await saveLocation(position)
 
-          const watchId = navigator.geolocation.watchPosition(
-            async (newPosition) => {
-              await saveLocation(newPosition)
-            },
-            (error) => {
-              if (error.code === 1) {
-                setMessage('Location permission was denied.')
-              } else if (error.code === 2) {
-                setMessage('Location is unavailable.')
-              } else {
-                setMessage('Unable to update location.')
+          const watchId =
+            navigator.geolocation.watchPosition(
+              async (newPosition) => {
+                await saveLocation(newPosition)
+              },
+              (error) => {
+                if (error.code === 1) {
+                  setMessage(
+                    'Location permission was denied.'
+                  )
+                } else if (error.code === 2) {
+                  setMessage(
+                    'Location is unavailable.'
+                  )
+                } else {
+                  setMessage(
+                    'Unable to update location.'
+                  )
+                }
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 10000,
               }
-            },
-            {
-              enableHighAccuracy: true,
-              timeout: 15000,
-              maximumAge: 10000,
-            }
-          )
+            )
 
           watchIdRef.current = watchId
           setIsTracking(true)
-          setMessage('Live location tracking started!')
+          setMessage(
+            'Live location tracking started!'
+          )
         } catch (error) {
           setMessage(error.message)
         } finally {
@@ -409,11 +436,17 @@ function App() {
         setLoading(false)
 
         if (error.code === 1) {
-          setMessage('Location permission was denied.')
+          setMessage(
+            'Location permission was denied.'
+          )
         } else if (error.code === 2) {
-          setMessage('Location is unavailable.')
+          setMessage(
+            'Location is unavailable.'
+          )
         } else {
-          setMessage('Unable to get your location.')
+          setMessage(
+            'Unable to get your location.'
+          )
         }
       },
       {
@@ -424,7 +457,6 @@ function App() {
     )
   }
 
-  // Stop automatic tracking
   const handleStopTracking = () => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(
@@ -435,7 +467,9 @@ function App() {
     }
 
     setIsTracking(false)
-    setMessage('Live location tracking stopped.')
+    setMessage(
+      'Live location tracking stopped.'
+    )
   }
 
   const handleLogout = async () => {
@@ -461,142 +495,290 @@ function App() {
   const styles = {
     page: {
       minHeight: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: '20px',
-      background: '#f5f7fa',
+      padding: '25px 15px',
+      background:
+        'linear-gradient(180deg, #eff6ff 0%, #f8fafc 45%, #f1f5f9 100%)',
       fontFamily: 'Arial, sans-serif',
     },
 
-    card: {
+    container: {
       width: '100%',
-      maxWidth: '600px',
-      background: '#ffffff',
-      borderRadius: '18px',
-      padding: '30px',
-      boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+      maxWidth: '1000px',
+      margin: '0 auto',
     },
 
-    title: {
+    card: {
+      background: '#ffffff',
+      borderRadius: '24px',
+      padding: '24px',
+      boxShadow:
+        '0 12px 35px rgba(15,23,42,0.08)',
+      border: '1px solid #e2e8f0',
+    },
+
+    authCard: {
+      maxWidth: '500px',
+      margin: '70px auto',
+    },
+
+    logo: {
       textAlign: 'center',
-      marginBottom: '10px',
-      color: '#222',
+      fontSize: '32px',
+      fontWeight: '800',
+      color: '#2563eb',
+      marginBottom: '6px',
     },
 
     subtitle: {
       textAlign: 'center',
-      color: '#666',
-      marginBottom: '25px',
+      color: '#64748b',
+      marginTop: 0,
+      marginBottom: '28px',
     },
 
     input: {
       width: '100%',
-      padding: '13px',
+      padding: '14px',
       marginBottom: '12px',
-      borderRadius: '10px',
-      border: '1px solid #ddd',
+      borderRadius: '12px',
+      border: '1px solid #cbd5e1',
       fontSize: '16px',
+      outline: 'none',
     },
 
     button: {
       width: '100%',
-      padding: '13px',
+      padding: '14px',
       marginBottom: '10px',
-      borderRadius: '10px',
+      borderRadius: '12px',
       border: 'none',
       background: '#2563eb',
       color: '#fff',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    },
+
+    secondaryButton: {
+      width: '100%',
+      padding: '14px',
+      marginBottom: '10px',
+      borderRadius: '12px',
+      border: '1px solid #cbd5e1',
+      background: '#fff',
+      color: '#0f172a',
       fontSize: '16px',
       cursor: 'pointer',
     },
 
     stopButton: {
       width: '100%',
-      padding: '13px',
+      padding: '14px',
       marginBottom: '10px',
-      borderRadius: '10px',
+      borderRadius: '12px',
       border: 'none',
       background: '#dc2626',
       color: '#fff',
       fontSize: '16px',
-      cursor: 'pointer',
-    },
-
-    secondaryButton: {
-      width: '100%',
-      padding: '13px',
-      marginBottom: '10px',
-      borderRadius: '10px',
-      border: '1px solid #ddd',
-      background: '#fff',
-      color: '#222',
-      fontSize: '16px',
+      fontWeight: 'bold',
       cursor: 'pointer',
     },
 
     roleButton: {
       width: '100%',
-      padding: '15px',
+      padding: '18px',
       marginBottom: '12px',
-      borderRadius: '12px',
-      border: '1px solid #ddd',
-      background: '#fff',
-      fontSize: '17px',
+      borderRadius: '16px',
+      border: '1px solid #dbeafe',
+      background: '#f8fbff',
+      fontSize: '18px',
+      fontWeight: 'bold',
       cursor: 'pointer',
+      color: '#1e3a8a',
     },
 
-    message: {
-      marginTop: '15px',
-      padding: '12px',
-      background: '#f1f5f9',
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: '15px',
+      marginBottom: '24px',
+      flexWrap: 'wrap',
+    },
+
+    headerTitle: {
+      margin: 0,
+      fontSize: '28px',
+    },
+
+    userText: {
+      margin: '5px 0 0',
+      color: '#64748b',
+      fontSize: '14px',
+    },
+
+    logoutButton: {
+      padding: '10px 18px',
       borderRadius: '10px',
-      color: '#333',
-      wordBreak: 'break-word',
+      border: '1px solid #fecaca',
+      background: '#fff',
+      color: '#dc2626',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    },
+
+    statGrid: {
+      display: 'grid',
+      gridTemplateColumns:
+        'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: '14px',
+      marginBottom: '22px',
+    },
+
+    stat: {
+      padding: '18px',
+      borderRadius: '16px',
+      background: '#f8fafc',
+      border: '1px solid #e2e8f0',
+    },
+
+    statNumber: {
+      fontSize: '28px',
+      fontWeight: '800',
+      color: '#2563eb',
+    },
+
+    statLabel: {
+      color: '#64748b',
+      marginTop: '5px',
+    },
+
+    familyBox: {
+      padding: '20px',
+      borderRadius: '18px',
+      background:
+        'linear-gradient(135deg, #eff6ff, #dbeafe)',
+      marginBottom: '22px',
+      textAlign: 'center',
     },
 
     code: {
-      textAlign: 'center',
-      fontSize: '32px',
-      fontWeight: 'bold',
-      letterSpacing: '5px',
-      padding: '20px',
-      background: '#eff6ff',
-      borderRadius: '12px',
+      fontSize: '34px',
+      fontWeight: '800',
+      letterSpacing: '6px',
       color: '#1d4ed8',
-      margin: '15px 0',
+      margin: '12px 0',
     },
 
-    section: {
-      marginTop: '25px',
-      paddingTop: '20px',
-      borderTop: '1px solid #eee',
+    sectionTitle: {
+      margin: '0 0 15px',
+      fontSize: '21px',
     },
 
     childCard: {
+      marginBottom: '18px',
+      padding: '18px',
+      borderRadius: '18px',
+      background: '#fff',
+      border: '1px solid #e2e8f0',
+      boxShadow:
+        '0 5px 18px rgba(15,23,42,0.05)',
+    },
+
+    childHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '14px',
+    },
+
+    avatar: {
+      width: '48px',
+      height: '48px',
+      borderRadius: '50%',
+      background: '#dbeafe',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '25px',
+    },
+
+    status: {
+      display: 'inline-block',
+      padding: '5px 10px',
+      borderRadius: '20px',
+      background: '#dcfce7',
+      color: '#166534',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      marginTop: '4px',
+    },
+
+    noLocation: {
       padding: '15px',
-      marginBottom: '10px',
       borderRadius: '12px',
       background: '#f8fafc',
+      color: '#64748b',
+      textAlign: 'center',
+    },
+
+    trackingBox: {
+      padding: '22px',
+      borderRadius: '18px',
+      background: '#f8fafc',
       border: '1px solid #e2e8f0',
+      textAlign: 'center',
+      marginTop: '20px',
+    },
+
+    active: {
+      padding: '14px',
+      borderRadius: '12px',
+      background: '#dcfce7',
+      color: '#166534',
+      fontWeight: 'bold',
+      marginBottom: '12px',
+    },
+
+    message: {
+      marginTop: '18px',
+      padding: '13px',
+      background: '#f1f5f9',
+      borderRadius: '12px',
+      color: '#334155',
+      wordBreak: 'break-word',
+      textAlign: 'center',
+    },
+
+    divider: {
+      height: '1px',
+      background: '#e2e8f0',
+      margin: '24px 0',
     },
   }
 
   if (!role) {
     return (
       <div style={styles.page}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>FamilyTrack</h1>
+        <div
+          style={{
+            ...styles.card,
+            ...styles.authCard,
+          }}
+        >
+          <div style={styles.logo}>
+            🏠 FamilyTrack
+          </div>
 
           <p style={styles.subtitle}>
-            Family safety and location tracking
+            Family safety made simple
           </p>
 
           <button
             style={styles.roleButton}
             onClick={() => setRole('parent')}
           >
-            👨 Parent
+            👨‍👩‍👧 Parent
           </button>
 
           <button
@@ -613,13 +795,20 @@ function App() {
   if (!user) {
     return (
       <div style={styles.page}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>FamilyTrack</h1>
+        <div
+          style={{
+            ...styles.card,
+            ...styles.authCard,
+          }}
+        >
+          <div style={styles.logo}>
+            🏠 FamilyTrack
+          </div>
 
           <p style={styles.subtitle}>
             {role === 'parent'
-              ? 'Parent Login'
-              : 'Child Login'}
+              ? 'Parent Account'
+              : 'Child Account'}
           </p>
 
           <input
@@ -627,7 +816,9 @@ function App() {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
           />
 
           <input
@@ -635,7 +826,9 @@ function App() {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
           />
 
           <button
@@ -685,8 +878,17 @@ function App() {
   if (loadingFamily) {
     return (
       <div style={styles.page}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>FamilyTrack</h1>
+        <div
+          style={{
+            ...styles.card,
+            maxWidth: '600px',
+            margin: '70px auto',
+            textAlign: 'center',
+          }}
+        >
+          <div style={styles.logo}>
+            🏠 FamilyTrack
+          </div>
 
           <p style={styles.subtitle}>
             Loading your family...
@@ -698,68 +900,181 @@ function App() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>FamilyTrack</h1>
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <div style={styles.header}>
+            <div>
+              <h1 style={styles.headerTitle}>
+                🏠 FamilyTrack
+              </h1>
 
-        <p style={styles.subtitle}>
-          Welcome {user.email}
-        </p>
+              <p style={styles.userText}>
+                {user.email}
+              </p>
+            </div>
 
-        {role === 'parent' ? (
-          <>
-            <h2>Parent Dashboard</h2>
+            <button
+              style={styles.logoutButton}
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
 
-            {!familyCode ? (
-              <>
-                <p>You don't have a family yet.</p>
+          {role === 'parent' ? (
+            <>
+              <h2 style={styles.sectionTitle}>
+                Parent Dashboard
+              </h2>
 
-                <button
-                  style={styles.button}
-                  onClick={handleCreateFamily}
-                  disabled={loading}
-                >
-                  {loading
-                    ? 'Creating...'
-                    : 'Create Family'}
-                </button>
-              </>
-            ) : (
-              <>
-                <p>Your Family Code:</p>
+              {!familyCode ? (
+                <div style={styles.trackingBox}>
+                  <div
+                    style={{
+                      fontSize: '45px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    👨‍👩‍👧‍👦
+                  </div>
 
-                <div style={styles.code}>
-                  {familyCode}
+                  <h3>
+                    Create your family
+                  </h3>
+
+                  <p
+                    style={{
+                      color: '#64748b',
+                    }}
+                  >
+                    Create a family and invite your
+                    children with a simple code.
+                  </p>
+
+                  <button
+                    style={styles.button}
+                    onClick={handleCreateFamily}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? 'Creating...'
+                      : 'Create Family'}
+                  </button>
                 </div>
+              ) : (
+                <>
+                  <div style={styles.statGrid}>
+                    <div style={styles.stat}>
+                      <div style={styles.statNumber}>
+                        {children.length}
+                      </div>
 
-                <p>
-                  Give this code to your children so they
-                  can join your family.
-                </p>
+                      <div style={styles.statLabel}>
+                        Children
+                      </div>
+                    </div>
 
-                <div style={styles.section}>
-                  <h2>Children</h2>
+                    <div style={styles.stat}>
+                      <div style={styles.statNumber}>
+                        {
+                          children.filter(
+                            (child) =>
+                              child.latitude &&
+                              child.longitude
+                          ).length
+                        }
+                      </div>
+
+                      <div style={styles.statLabel}>
+                        Locations shared
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={styles.familyBox}>
+                    <div
+                      style={{
+                        color: '#475569',
+                      }}
+                    >
+                      Your Family Code
+                    </div>
+
+                    <div style={styles.code}>
+                      {familyCode}
+                    </div>
+
+                    <div
+                      style={{
+                        color: '#475569',
+                        fontSize: '14px',
+                      }}
+                    >
+                      Give this code to your children
+                    </div>
+                  </div>
+
+                  <h2 style={styles.sectionTitle}>
+                    👨‍👩‍👧‍👦 Family Members
+                  </h2>
 
                   {children.length === 0 ? (
-                    <p>No children have joined yet.</p>
+                    <div style={styles.noLocation}>
+                      No children have joined yet.
+                    </div>
                   ) : (
                     children.map((child) => (
                       <div
                         key={child.id}
                         style={styles.childCard}
                       >
-                        <strong>👦 Child</strong>
+                        <div
+                          style={styles.childHeader}
+                        >
+                          <div style={styles.avatar}>
+                            👦
+                          </div>
 
-                        <div style={{ marginTop: '6px' }}>
-                          {child.email}
+                          <div>
+                            <strong>
+                              Child
+                            </strong>
+
+                            <div
+                              style={{
+                                color: '#64748b',
+                                fontSize: '14px',
+                                marginTop: '3px',
+                              }}
+                            >
+                              {child.email}
+                            </div>
+
+                            {child.latitude &&
+                            child.longitude ? (
+                              <div
+                                style={styles.status}
+                              >
+                                🟢 Location available
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  ...styles.status,
+                                  background:
+                                    '#f1f5f9',
+                                  color: '#64748b',
+                                }}
+                              >
+                                ⚪ No location
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {child.latitude &&
                         child.longitude ? (
                           <>
-                            <div style={{ marginTop: '8px' }}>
-                              📍 Location shared
-                            </div>
-
                             <MapContainer
                               center={[
                                 child.latitude,
@@ -769,7 +1084,7 @@ function App() {
                               scrollWheelZoom={true}
                             >
                               <TileLayer
-                                attribution='&copy; OpenStreetMap contributors'
+                                attribution="&copy; OpenStreetMap contributors"
                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                               />
 
@@ -790,120 +1105,176 @@ function App() {
                                 </Popup>
                               </Marker>
                             </MapContainer>
+
+                            <div
+                              style={{
+                                marginTop: '10px',
+                                color: '#64748b',
+                                fontSize: '13px',
+                              }}
+                            >
+                              📍 Accuracy:{' '}
+                              {Math.round(
+                                child.accuracy || 0
+                              )}{' '}
+                              meters
+                            </div>
                           </>
                         ) : (
-                          <div style={{ marginTop: '8px' }}>
-                            📍 No location yet
+                          <div
+                            style={styles.noLocation}
+                          >
+                            📍 Waiting for location
                           </div>
                         )}
                       </div>
                     ))
                   )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <h2 style={styles.sectionTitle}>
+                Child Dashboard
+              </h2>
+
+              {!familyCode ? (
+                <div style={styles.trackingBox}>
+                  <div
+                    style={{
+                      fontSize: '45px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    👨‍👩‍👧‍👦
+                  </div>
+
+                  <h3>
+                    Join your family
+                  </h3>
+
+                  <p
+                    style={{
+                      color: '#64748b',
+                    }}
+                  >
+                    Enter the Family Code from your
+                    parent.
+                  </p>
+
+                  <input
+                    style={styles.input}
+                    type="text"
+                    maxLength="6"
+                    placeholder="Family Code"
+                    value={joinCode}
+                    onChange={(e) =>
+                      setJoinCode(
+                        e.target.value.toUpperCase()
+                      )
+                    }
+                  />
+
+                  <button
+                    style={styles.button}
+                    onClick={handleJoinFamily}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? 'Joining...'
+                      : 'Join Family'}
+                  </button>
                 </div>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <h2>Child Dashboard</h2>
-
-            {!familyCode ? (
-              <>
-                <p>
-                  Enter the Family Code given to you by
-                  your parent.
-                </p>
-
-                <input
-                  style={styles.input}
-                  type="text"
-                  maxLength="6"
-                  placeholder="Family Code"
-                  value={joinCode}
-                  onChange={(e) =>
-                    setJoinCode(
-                      e.target.value.toUpperCase()
-                    )
-                  }
-                />
-
-                <button
-                  style={styles.button}
-                  onClick={handleJoinFamily}
-                  disabled={loading}
-                >
-                  {loading ? 'Joining...' : 'Join Family'}
-                </button>
-              </>
-            ) : (
-              <>
-                <p>
-                  You are connected to family:
-                </p>
-
-                <div style={styles.code}>
-                  {familyCode}
-                </div>
-
-                {!isTracking ? (
-                  <>
-                    <button
-                      style={styles.button}
-                      onClick={handleStartTracking}
-                      disabled={loading}
-                    >
-                      {loading
-                        ? 'Starting...'
-                        : '📍 Start Live Location'}
-                    </button>
-
-                    <p>
-                      Start live tracking to automatically
-                      share your location.
-                    </p>
-                  </>
-                ) : (
-                  <>
+              ) : (
+                <>
+                  <div style={styles.familyBox}>
                     <div
                       style={{
-                        padding: '12px',
-                        marginBottom: '10px',
-                        borderRadius: '10px',
-                        background: '#dcfce7',
-                        color: '#166534',
-                        textAlign: 'center',
-                        fontWeight: 'bold',
+                        color: '#475569',
                       }}
                     >
-                      🟢 Live location is active
+                      Connected to family
                     </div>
 
-                    <button
-                      style={styles.stopButton}
-                      onClick={handleStopTracking}
-                    >
-                      🛑 Stop Location Sharing
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </>
-        )}
+                    <div style={styles.code}>
+                      {familyCode}
+                    </div>
+                  </div>
 
-        {message && (
-          <div style={styles.message}>
-            {message}
-          </div>
-        )}
+                  <div style={styles.trackingBox}>
+                    {isTracking ? (
+                      <>
+                        <div style={styles.active}>
+                          🟢 Live location is active
+                        </div>
 
-        <div style={styles.section}>
-          <button
-            style={styles.secondaryButton}
-            onClick={handleLogout}
-          >
-            Logout
-          </button>
+                        <p
+                          style={{
+                            color: '#64748b',
+                          }}
+                        >
+                          Your location is being
+                          shared with your parent.
+                        </p>
+
+                        <button
+                          style={styles.stopButton}
+                          onClick={
+                            handleStopTracking
+                          }
+                        >
+                          🛑 Stop Location Sharing
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            fontSize: '50px',
+                            marginBottom: '10px',
+                          }}
+                        >
+                          📍
+                        </div>
+
+                        <h3>
+                          Share your location
+                        </h3>
+
+                        <p
+                          style={{
+                            color: '#64748b',
+                          }}
+                        >
+                          Allow your parent to see
+                          your current location.
+                        </p>
+
+                        <button
+                          style={styles.button}
+                          onClick={
+                            handleStartTracking
+                          }
+                          disabled={loading}
+                        >
+                          {loading
+                            ? 'Starting...'
+                            : '📍 Start Live Location'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {message && (
+            <div style={styles.message}>
+              {message}
+            </div>
+          )}
         </div>
       </div>
     </div>
