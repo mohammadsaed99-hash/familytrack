@@ -19,6 +19,8 @@ import {
   setDoc,
 } from 'firebase/firestore'
 
+import { getToken } from 'firebase/messaging'
+
 import 'leaflet/dist/leaflet.css'
 
 import {
@@ -30,9 +32,16 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 
-import { auth, db } from './firebase'
+import {
+  auth,
+  db,
+  messaging,
+} from './firebase'
 
 const SAFE_ZONE_RADIUS = 100
+
+const VAPID_KEY =
+  'BEYnLQTQeaIbsVU6q1V5jLvXDOurQNOovshiLAhFv82QfYYkY-bp3XOMIK3uFvW-nVhHXccuDnDGtf7alSEqFHw'
 
 function generateFamilyCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -45,7 +54,6 @@ function generateFamilyCode() {
   return code
 }
 
-// حساب المسافة بين نقطتين بالمتر
 function calculateDistance(
   lat1,
   lon1,
@@ -123,11 +131,14 @@ function App() {
         : 'unsupported'
     )
 
+  const [fcmReady, setFcmReady] =
+    useState(false)
+
   const watchIdRef = useRef(null)
   const lastSavedRef = useRef(0)
 
-  // يتذكر آخر حالة لكل طفل لمنع تكرار التنبيه
-  const previousChildStatusRef = useRef({})
+  const previousChildStatusRef =
+    useRef({})
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
@@ -150,6 +161,107 @@ function App() {
     }
   }, [])
 
+  // تسجيل جهاز الأب في Firebase Cloud Messaging
+  const registerForPushNotifications =
+    async () => {
+      if (!user || role !== 'parent') {
+        return
+      }
+
+      if (
+        typeof window === 'undefined' ||
+        !('Notification' in window)
+      ) {
+        setMessage(
+          'Push notifications are not supported by this browser.'
+        )
+        return
+      }
+
+      try {
+        setLoading(true)
+        setMessage('')
+
+        let permission =
+          Notification.permission
+
+        if (permission === 'default') {
+          permission =
+            await Notification.requestPermission()
+        }
+
+        setNotificationPermission(
+          permission
+        )
+
+        if (permission !== 'granted') {
+          setMessage(
+            'Notification permission was not granted.'
+          )
+          return
+        }
+
+        const messagingInstance =
+          await messaging
+
+        if (!messagingInstance) {
+          setMessage(
+            'Firebase Messaging is not supported by this browser.'
+          )
+          return
+        }
+
+        const registration =
+          await navigator.serviceWorker.register(
+            '/familytrack/firebase-messaging-sw.js'
+          )
+
+        const token =
+          await getToken(
+            messagingInstance,
+            {
+              vapidKey: VAPID_KEY,
+              serviceWorkerRegistration:
+                registration,
+            }
+          )
+
+        if (!token) {
+          setMessage(
+            'Unable to get the FCM token.'
+          )
+          return
+        }
+
+        /*
+         * نحفظ التوكن مؤقتاً على الجهاز.
+         * في الخطوة التالية سنضيف حفظه في Firestore
+         * حتى يستطيع السيرفر إرسال التنبيهات لهذا الجهاز.
+         */
+        localStorage.setItem(
+          'familytrack_fcm_token',
+          token
+        )
+
+        setFcmReady(true)
+
+        setMessage(
+          '🟢 Push notifications are ready on this device.'
+        )
+      } catch (error) {
+        console.error(
+          'FCM registration error:',
+          error
+        )
+
+        setMessage(
+          `FCM error: ${error.message}`
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
   // طلب إذن إشعارات المتصفح
   const requestNotificationPermission =
     async () => {
@@ -166,9 +278,7 @@ function App() {
         Notification.permission === 'granted'
       ) {
         setNotificationPermission('granted')
-        setMessage(
-          'Browser notifications are already enabled.'
-        )
+        await registerForPushNotifications()
         return
       }
 
@@ -194,6 +304,8 @@ function App() {
           setMessage(
             '🔔 Browser notifications enabled.'
           )
+
+          await registerForPushNotifications()
         } else {
           setMessage(
             'Notifications were not enabled.'
@@ -204,7 +316,7 @@ function App() {
       }
     }
 
-  // إرسال تنبيه للوالد
+  // إرسال تنبيه للوالد عندما تكون الصفحة مفتوحة
   const sendParentNotification = (
     child
   ) => {
@@ -332,6 +444,23 @@ function App() {
     findFamily()
   }, [user, role])
 
+  // تسجيل FCM تلقائياً للأب إذا كان الإذن موجوداً
+  useEffect(() => {
+    if (
+      !user ||
+      role !== 'parent' ||
+      notificationPermission !== 'granted'
+    ) {
+      return
+    }
+
+    registerForPushNotifications()
+  }, [
+    user,
+    role,
+    notificationPermission,
+  ])
+
   // Live Safe Zone updates
   useEffect(() => {
     if (!user || !familyCode) return
@@ -401,7 +530,6 @@ function App() {
 
         setChildren(childList)
 
-        // فحص حالات Safe Zone الجديدة
         childList.forEach((child) => {
           const currentStatus =
             child.safeZoneStatus
@@ -411,7 +539,6 @@ function App() {
               child.id
             ]
 
-          // أول مرة نرى الطفل: نحفظ الحالة فقط
           if (
             previousStatus === undefined
           ) {
@@ -422,7 +549,6 @@ function App() {
             return
           }
 
-          // إذا انتقل من داخل/غير معروف إلى خارج
           if (
             currentStatus === 'outside' &&
             previousStatus !== 'outside'
@@ -647,7 +773,6 @@ function App() {
     }
   }
 
-  // Set Safe Zone
   const handleSetSafeZone =
     async (location) => {
       if (!user || !familyCode) return
@@ -715,7 +840,6 @@ function App() {
       }
     }
 
-  // Save child location
   const saveLocation = async (
     position
   ) => {
@@ -973,6 +1097,7 @@ function App() {
     setChildren([])
     setSafeZone(null)
     setMessage('')
+    setFcmReady(false)
     previousChildStatusRef.current = {}
   }
 
@@ -1199,40 +1324,6 @@ function App() {
       fontSize: '25px',
     },
 
-    status: {
-      display: 'inline-block',
-      padding:
-        '5px 10px',
-      borderRadius: '20px',
-      background: '#dcfce7',
-      color: '#166534',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      marginTop: '4px',
-    },
-
-    safeStatusInside: {
-      padding: '12px',
-      borderRadius: '12px',
-      background: '#dcfce7',
-      color: '#166534',
-      fontWeight: 'bold',
-      textAlign: 'center',
-      marginTop: '12px',
-    },
-
-    safeStatusOutside: {
-      padding: '14px',
-      borderRadius: '12px',
-      background: '#fee2e2',
-      color: '#991b1b',
-      fontWeight: 'bold',
-      textAlign: 'center',
-      marginTop: '12px',
-      border:
-        '1px solid #fecaca',
-    },
-
     notificationBox: {
       padding: '16px',
       borderRadius: '16px',
@@ -1289,6 +1380,28 @@ function App() {
       fontWeight: 'bold',
       color: '#166534',
       marginBottom: '8px',
+    },
+
+    safeStatusInside: {
+      padding: '12px',
+      borderRadius: '12px',
+      background: '#dcfce7',
+      color: '#166534',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginTop: '12px',
+    },
+
+    safeStatusOutside: {
+      padding: '14px',
+      borderRadius: '12px',
+      background: '#fee2e2',
+      color: '#991b1b',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginTop: '12px',
+      border:
+        '1px solid #fecaca',
     },
 
     message: {
@@ -1677,17 +1790,55 @@ function App() {
 
                     {notificationPermission ===
                     'granted' ? (
-                      <div
-                        style={{
-                          color:
-                            '#166534',
-                          fontWeight:
-                            'bold',
-                        }}
-                      >
-                        🟢 Browser notifications
-                        are enabled.
-                      </div>
+                      <>
+                        <div
+                          style={{
+                            color:
+                              '#166534',
+                            fontWeight:
+                              'bold',
+                          }}
+                        >
+                          🟢 Browser notifications
+                          are enabled.
+                        </div>
+
+                        {fcmReady && (
+                          <div
+                            style={{
+                              color:
+                                '#166534',
+                              marginTop:
+                                '8px',
+                              fontSize:
+                                '14px',
+                            }}
+                          >
+                            🟢 Push notifications
+                            are ready on this
+                            device.
+                          </div>
+                        )}
+
+                        {!fcmReady && (
+                          <button
+                            style={{
+                              ...styles.secondaryButton,
+                              marginTop:
+                                '12px',
+                            }}
+                            onClick={
+                              registerForPushNotifications
+                            }
+                            disabled={
+                              loading
+                            }
+                          >
+                            🔔 Activate Push
+                            Notifications
+                          </button>
+                        )}
+                      </>
                     ) : notificationPermission ===
                       'denied' ? (
                       <div
