@@ -594,38 +594,39 @@ export default function App() {
             position.coords.longitude
 
           const accuracy =
-            position.coords.accuracy
+  position.coords.accuracy
 
-          setLocation({
-            latitude,
-            longitude,
-            accuracy,
-          })
+setLocation({
+  latitude,
+  longitude,
+  accuracy,
+})
 
-          let status = 'unknown'
-          let distance = null
+let status = 'unknown'
+let distance = null
 
-          if (
-            safeZone &&
-            typeof safeZone.latitude ===
-              'number' &&
-            typeof safeZone.longitude ===
-              'number'
-          ) {
-            distance =
-              calculateDistance(
-                latitude,
-                longitude,
-                safeZone.latitude,
-                safeZone.longitude
-              )
+if (
+  safeZone &&
+  typeof safeZone.latitude === 'number' &&
+  typeof safeZone.longitude === 'number'
+) {
+  distance = calculateDistance(
+    latitude,
+    longitude,
+    safeZone.latitude,
+    safeZone.longitude
+  )
 
-            status =
-              distance <= SAFE_ZONE_RADIUS
-                ? 'inside'
-                : 'outside'
-          }
-
+  // إذا دقة GPS ضعيفة، لا نعتبر الموقع موثوقًا
+  if (accuracy > 50) {
+    status = 'unknown'
+  } else {
+    status =
+      distance <= SAFE_ZONE_RADIUS
+        ? 'inside'
+        : 'outside'
+  }
+}
           setSafeZoneStatus(status)
           setDistanceFromSafeZone(distance)
 
