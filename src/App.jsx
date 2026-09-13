@@ -926,26 +926,6 @@ async function sendParentNotification(child) {
     )
   }
 }
-    if (
-      typeof Notification ===
-        'undefined' ||
-      Notification.permission !==
-        'granted'
-    ) {
-      return
-    }
-
-    const name =
-      child.email ||
-      'Your child'
-
-    new Notification(
-      'FamilyTrack Alert',
-      {
-        body: `${name} has left the Safe Zone.`,
-      }
-    )
-  }
 
   async function logout() {
     stopLocationTracking()
