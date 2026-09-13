@@ -14,6 +14,7 @@ import {
   doc,
   getDocs,
   getDoc,
+  onSnapshot,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore'
@@ -127,35 +128,38 @@ function App() {
     findFamily()
   }, [user, role])
 
+  // Live children updates
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
       return
     }
 
-    const loadChildren = async () => {
-      try {
-        const membersRef = collection(
-          db,
-          'families',
-          familyCode,
-          'members'
+    const membersRef = collection(
+      db,
+      'families',
+      familyCode,
+      'members'
+    )
+
+    const unsubscribe = onSnapshot(
+      membersRef,
+      (snapshot) => {
+        const childList = snapshot.docs.map(
+          (memberDoc) => ({
+            id: memberDoc.id,
+            ...memberDoc.data(),
+          })
         )
 
-        const snapshot = await getDocs(membersRef)
-
-        const childList = snapshot.docs.map((memberDoc) => ({
-          id: memberDoc.id,
-          ...memberDoc.data(),
-        }))
-
         setChildren(childList)
-      } catch (error) {
+      },
+      (error) => {
         setMessage(error.message)
       }
-    }
+    )
 
-    loadChildren()
+    return unsubscribe
   }, [user, role, familyCode])
 
   const handleEmailLogin = async () => {
@@ -168,11 +172,13 @@ function App() {
 
     try {
       setLoading(true)
+
       await signInWithEmailAndPassword(
         auth,
         email,
         password
       )
+
       setMessage('Login successful!')
     } catch (error) {
       setMessage(error.message)
@@ -748,12 +754,6 @@ function App() {
       color: '#334155',
       wordBreak: 'break-word',
       textAlign: 'center',
-    },
-
-    divider: {
-      height: '1px',
-      background: '#e2e8f0',
-      margin: '24px 0',
     },
   }
 
