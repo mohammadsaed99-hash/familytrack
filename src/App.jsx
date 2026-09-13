@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -7,6 +8,7 @@ import {
   signInWithPopup,
   signOut,
 } from 'firebase/auth'
+
 import {
   collection,
   doc,
@@ -18,11 +20,13 @@ import {
   where,
   serverTimestamp,
 } from 'firebase/firestore'
+
 import {
   getMessaging,
   getToken,
   isSupported,
 } from 'firebase/messaging'
+
 import {
   MapContainer,
   Marker,
@@ -31,6 +35,7 @@ import {
   Circle,
   useMapEvents,
 } from 'react-leaflet'
+
 import L from 'leaflet'
 
 import { auth, db } from './firebase'
@@ -104,7 +109,8 @@ export default function App() {
 
   const [safeZone, setSafeZone] = useState(null)
   const [safeZoneStatus, setSafeZoneStatus] = useState('unknown')
-  const [distanceFromSafeZone, setDistanceFromSafeZone] = useState(null)
+  const [distanceFromSafeZone, setDistanceFromSafeZone] =
+    useState(null)
 
   const [notificationPermission, setNotificationPermission] =
     useState(
@@ -250,7 +256,11 @@ export default function App() {
   }, [familyCode, role])
 
   useEffect(() => {
-    if (!familyCode || role !== 'child' || !user) {
+    if (
+      !familyCode ||
+      role !== 'child' ||
+      !user
+    ) {
       return
     }
 
@@ -314,7 +324,9 @@ export default function App() {
           }
 
           const previousStatus =
-            previousChildStatusRef.current[child.id]
+            previousChildStatusRef.current[
+              child.id
+            ]
 
           if (
             child.safeZoneStatus === 'outside' &&
@@ -326,7 +338,8 @@ export default function App() {
 
           previousChildStatusRef.current[
             child.id
-          ] = child.safeZoneStatus || 'unknown'
+          ] =
+            child.safeZoneStatus || 'unknown'
         })
       }
     )
@@ -341,7 +354,12 @@ export default function App() {
     ) {
       registerForPushNotifications()
     }
-  }, [role, notificationPermission])
+  }, [
+    role,
+    notificationPermission,
+    familyCode,
+    user,
+  ])
 
   useEffect(() => {
     return () => {
@@ -373,6 +391,7 @@ export default function App() {
         )
 
       setUser(result.user)
+
       setMessage(
         'Account created successfully.'
       )
@@ -401,6 +420,7 @@ export default function App() {
         )
 
       setUser(result.user)
+
       setMessage(
         'Logged in successfully.'
       )
@@ -424,6 +444,7 @@ export default function App() {
         )
 
       setUser(result.user)
+
       setMessage(
         'Logged in successfully.'
       )
@@ -488,9 +509,7 @@ export default function App() {
       )
 
       if (familySnapshot.empty) {
-        setError(
-          'Family code not found.'
-        )
+        setError('Family code not found.')
         return
       }
 
@@ -591,12 +610,13 @@ export default function App() {
             typeof safeZone.longitude ===
               'number'
           ) {
-            distance = calculateDistance(
-              latitude,
-              longitude,
-              safeZone.latitude,
-              safeZone.longitude
-            )
+            distance =
+              calculateDistance(
+                latitude,
+                longitude,
+                safeZone.latitude,
+                safeZone.longitude
+              )
 
             status =
               distance <= SAFE_ZONE_RADIUS
@@ -672,7 +692,10 @@ export default function App() {
   async function setSafeZoneAtLocation(
     position
   ) {
-    if (!familyCode || role !== 'parent') {
+    if (
+      !familyCode ||
+      role !== 'parent'
+    ) {
       return
     }
 
@@ -685,7 +708,11 @@ export default function App() {
       }
 
       await updateDoc(
-        doc(db, 'families', familyCode),
+        doc(
+          db,
+          'families',
+          familyCode
+        ),
         {
           safeZone: newSafeZone,
         }
@@ -720,7 +747,9 @@ export default function App() {
       const permission =
         await Notification.requestPermission()
 
-      setNotificationPermission(permission)
+      setNotificationPermission(
+        permission
+      )
 
       if (permission === 'granted') {
         await registerForPushNotifications()
@@ -752,6 +781,14 @@ export default function App() {
       if (
         Notification.permission !==
         'granted'
+      ) {
+        return
+      }
+
+      if (
+        !user ||
+        !familyCode ||
+        role !== 'parent'
       ) {
         return
       }
@@ -795,10 +832,30 @@ export default function App() {
         token
       )
 
+      await setDoc(
+        doc(
+          db,
+          'families',
+          familyCode
+        ),
+        {
+          parentFcmToken: token,
+          parentFcmTokenUpdatedAt:
+            serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      )
+
       setFcmReady(true)
 
+      setMessage(
+        'Push notifications are ready on this device.'
+      )
+
       console.log(
-        'FCM token:',
+        'FCM token saved to Firestore:',
         token
       )
     } catch (err) {
@@ -811,9 +868,7 @@ export default function App() {
     }
   }
 
-  function sendParentNotification(
-    child
-  ) {
+  function sendParentNotification(child) {
     if (
       typeof Notification ===
         'undefined' ||
@@ -824,7 +879,8 @@ export default function App() {
     }
 
     const name =
-      child.email || 'Your child'
+      child.email ||
+      'Your child'
 
     new Notification(
       'FamilyTrack Alert',
@@ -846,6 +902,7 @@ export default function App() {
     setChildren([])
     setLocation(null)
     setSafeZone(null)
+    setFcmReady(false)
   }
 
   if (loading) {
@@ -866,8 +923,7 @@ export default function App() {
           </h1>
 
           <p style={styles.subtitle}>
-            Family safety and location
-            tracking
+            Family safety and location tracking
           </p>
 
           <input
@@ -940,7 +996,9 @@ export default function App() {
           <p>
             Logged in as:
             <br />
-            <strong>{user.email}</strong>
+            <strong>
+              {user.email}
+            </strong>
           </p>
 
           <h2>Choose your role</h2>
@@ -1031,7 +1089,9 @@ export default function App() {
 
             {!tracking ? (
               <button
-                style={styles.primaryButton}
+                style={
+                  styles.primaryButton
+                }
                 onClick={
                   startLocationTracking
                 }
@@ -1040,7 +1100,9 @@ export default function App() {
               </button>
             ) : (
               <button
-                style={styles.dangerButton}
+                style={
+                  styles.dangerButton
+                }
                 onClick={
                   stopLocationTracking
                 }
@@ -1062,8 +1124,7 @@ export default function App() {
                   styles.insideText
                 }
               >
-                🟢 You are inside the
-                Safe Zone.
+                🟢 You are inside the Safe Zone.
               </p>
             )}
 
@@ -1074,8 +1135,7 @@ export default function App() {
                   styles.outsideText
                 }
               >
-                🔴 You are outside the
-                Safe Zone.
+                🔴 You are outside the Safe Zone.
               </p>
             )}
 
@@ -1118,7 +1178,7 @@ export default function App() {
                 )}{' '}
                 meters
               </p>
-            </div>
+          </div>
           )}
 
           {message && (
@@ -1180,17 +1240,12 @@ export default function App() {
             Your Family Code
           </h3>
 
-          <div
-            style={
-              styles.familyCode
-            }
-          >
+          <div style={styles.familyCode}>
             {familyCode}
           </div>
 
           <p>
-            Give this code to your
-            children.
+            Give this code to your children.
           </p>
         </div>
 
@@ -1206,8 +1261,7 @@ export default function App() {
                 styles.outsideText
               }
             >
-              🔴 Browser notifications
-              are blocked.
+              🔴 Browser notifications are blocked.
             </p>
           ) : fcmReady ? (
             <p
@@ -1215,8 +1269,8 @@ export default function App() {
                 styles.insideText
               }
             >
-              🟢 Push notifications are
-              ready on this device.
+              🟢 Push notifications are ready on this
+              device.
             </p>
           ) : notificationPermission ===
             'granted' ? (
@@ -1226,8 +1280,7 @@ export default function App() {
                   styles.insideText
                 }
               >
-                🟢 Browser notifications
-                are enabled.
+                🟢 Browser notifications are enabled.
               </p>
 
               <button
@@ -1238,15 +1291,14 @@ export default function App() {
                   registerForPushNotifications
                 }
               >
-                Activate Push
-                Notifications
+                Activate Push Notifications
               </button>
             </>
           ) : (
             <>
               <p>
-                Enable notifications to
-                receive Safe Zone alerts.
+                Enable notifications to receive Safe
+                Zone alerts.
               </p>
 
               <button
@@ -1288,7 +1340,7 @@ export default function App() {
                 scrollWheelZoom={true}
               >
                 <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
+                  attribution='&copy; OpenStreetMap contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -1320,9 +1372,7 @@ export default function App() {
                           child.latitude,
                           child.longitude,
                         ]}
-                        icon={
-                          childIcon
-                        }
+                        icon={childIcon}
                       >
                         <Popup>
                           <strong>
@@ -1356,8 +1406,8 @@ export default function App() {
                   styles.mapHint
                 }
               >
-                Click anywhere on the map
-                to move the Safe Zone.
+                Click anywhere on the map to move the
+                Safe Zone.
               </p>
             </>
           ) : (
@@ -1367,8 +1417,8 @@ export default function App() {
               </p>
 
               <p>
-                Click on the map below to
-                create a 100-meter Safe Zone.
+                Click on the map below to create a
+                100-meter Safe Zone.
               </p>
 
               <MapContainer
@@ -1377,7 +1427,7 @@ export default function App() {
                 scrollWheelZoom={true}
               >
                 <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
+                  attribution='&copy; OpenStreetMap contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -1427,8 +1477,7 @@ export default function App() {
                       styles.outsideText
                     }
                   >
-                    🔴 Child is outside
-                    the Safe Zone
+                    🔴 Child is outside the Safe Zone
                   </p>
                 )}
 
@@ -1439,8 +1488,7 @@ export default function App() {
                       styles.insideText
                     }
                   >
-                    🟢 Child is inside
-                    the Safe Zone
+                    🟢 Child is inside the Safe Zone
                   </p>
                 )}
 
@@ -1475,11 +1523,18 @@ export default function App() {
   )
 }
 
-function Header({ email, onLogout }) {
+function Header({
+  email,
+  onLogout,
+}) {
   return (
     <div style={styles.header}>
       <div>
-        <h1 style={{ margin: 0 }}>
+        <h1
+          style={{
+            margin: 0,
+          }}
+        >
           🏠 FamilyTrack
         </h1>
 
@@ -1487,7 +1542,9 @@ function Header({ email, onLogout }) {
       </div>
 
       <button
-        style={styles.logoutButton}
+        style={
+          styles.logoutButton
+        }
         onClick={onLogout}
       >
         Logout
@@ -1551,7 +1608,8 @@ const styles = {
     width: '100%',
     padding: '13px',
     marginBottom: '12px',
-    border: '1px solid #cbd5e1',
+    border:
+      '1px solid #cbd5e1',
     borderRadius: '10px',
     fontSize: '16px',
   },
@@ -1594,7 +1652,8 @@ const styles = {
   googleButton: {
     width: '100%',
     padding: '13px',
-    border: '1px solid #cbd5e1',
+    border:
+      '1px solid #cbd5e1',
     borderRadius: '10px',
     background: '#fff',
     color: '#111827',
@@ -1635,7 +1694,8 @@ const styles = {
 
   header: {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     gap: '15px',
     marginBottom: '25px',
@@ -1692,7 +1752,8 @@ const styles = {
   childCard: {
     padding: '15px',
     marginTop: '10px',
-    border: '1px solid #e2e8f0',
+    border:
+      '1px solid #e2e8f0',
     borderRadius: '12px',
   },
 
