@@ -32,6 +32,8 @@ import {
 
 import { auth, db } from './firebase'
 
+const SAFE_ZONE_RADIUS = 100
+
 function generateFamilyCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
@@ -43,7 +45,38 @@ function generateFamilyCode() {
   return code
 }
 
-const SAFE_ZONE_RADIUS = 100
+// حساب المسافة بين نقطتين بالمتر
+function calculateDistance(
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) {
+  const earthRadius = 6371000
+
+  const dLat =
+    ((lat2 - lat1) * Math.PI) / 180
+
+  const dLon =
+    ((lon2 - lon1) * Math.PI) / 180
+
+  const a =
+    Math.sin(dLat / 2) *
+      Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2)
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    )
+
+  return earthRadius * c
+}
 
 function LocationPicker({ onPick }) {
   useMapEvents({
@@ -71,20 +104,28 @@ function App() {
 
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loadingFamily, setLoadingFamily] = useState(false)
+  const [loadingFamily, setLoadingFamily] =
+    useState(false)
 
-  const [isTracking, setIsTracking] = useState(false)
+  const [isTracking, setIsTracking] =
+    useState(false)
 
-  const [safeZone, setSafeZone] = useState(null)
-  const [settingSafeZone, setSettingSafeZone] = useState(false)
+  const [safeZone, setSafeZone] =
+    useState(null)
+
+  const [settingSafeZone, setSettingSafeZone] =
+    useState(false)
 
   const watchIdRef = useRef(null)
   const lastSavedRef = useRef(0)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-    })
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        setUser(currentUser)
+      }
+    )
 
     return unsubscribe
   }, [])
@@ -108,13 +149,19 @@ function App() {
         setLoadingFamily(true)
         setMessage('')
 
-        const familiesRef = collection(db, 'families')
-        const snapshot = await getDocs(familiesRef)
+        const familiesRef = collection(
+          db,
+          'families'
+        )
+
+        const snapshot =
+          await getDocs(familiesRef)
 
         if (role === 'parent') {
           const family = snapshot.docs.find(
             (familyDoc) =>
-              familyDoc.data().parentId === user.uid
+              familyDoc.data().parentId ===
+              user.uid
           )
 
           if (family) {
@@ -124,8 +171,10 @@ function App() {
 
             if (
               data.safeZone &&
-              typeof data.safeZone.latitude === 'number' &&
-              typeof data.safeZone.longitude === 'number'
+              typeof data.safeZone.latitude ===
+                'number' &&
+              typeof data.safeZone.longitude ===
+                'number'
             ) {
               setSafeZone(data.safeZone)
             }
@@ -142,7 +191,8 @@ function App() {
               user.uid
             )
 
-            const memberSnapshot = await getDoc(memberRef)
+            const memberSnapshot =
+              await getDoc(memberRef)
 
             if (memberSnapshot.exists()) {
               setFamilyCode(familyDoc.id)
@@ -151,8 +201,10 @@ function App() {
 
               if (
                 data.safeZone &&
-                typeof data.safeZone.latitude === 'number' &&
-                typeof data.safeZone.longitude === 'number'
+                typeof data.safeZone.latitude ===
+                  'number' &&
+                typeof data.safeZone.longitude ===
+                  'number'
               ) {
                 setSafeZone(data.safeZone)
               }
@@ -171,7 +223,7 @@ function App() {
     findFamily()
   }, [user, role])
 
-  // Live family / Safe Zone updates
+  // Live Safe Zone updates
   useEffect(() => {
     if (!user || !familyCode) return
 
@@ -190,10 +242,14 @@ function App() {
 
         if (
           data.safeZone &&
-          typeof data.safeZone.latitude === 'number' &&
-          typeof data.safeZone.longitude === 'number'
+          typeof data.safeZone.latitude ===
+            'number' &&
+          typeof data.safeZone.longitude ===
+            'number'
         ) {
           setSafeZone(data.safeZone)
+        } else {
+          setSafeZone(null)
         }
       },
       (error) => {
@@ -206,7 +262,11 @@ function App() {
 
   // Live children updates
   useEffect(() => {
-    if (!user || role !== 'parent' || !familyCode) {
+    if (
+      !user ||
+      role !== 'parent' ||
+      !familyCode
+    ) {
       setChildren([])
       return
     }
@@ -221,12 +281,13 @@ function App() {
     const unsubscribe = onSnapshot(
       membersRef,
       (snapshot) => {
-        const childList = snapshot.docs.map(
-          (memberDoc) => ({
-            id: memberDoc.id,
-            ...memberDoc.data(),
-          })
-        )
+        const childList =
+          snapshot.docs.map(
+            (memberDoc) => ({
+              id: memberDoc.id,
+              ...memberDoc.data(),
+            })
+          )
 
         setChildren(childList)
       },
@@ -242,7 +303,9 @@ function App() {
     setMessage('')
 
     if (!email || !password) {
-      setMessage('Please enter email and password.')
+      setMessage(
+        'Please enter email and password.'
+      )
       return
     }
 
@@ -267,12 +330,16 @@ function App() {
     setMessage('')
 
     if (!email || !password) {
-      setMessage('Please enter email and password.')
+      setMessage(
+        'Please enter email and password.'
+      )
       return
     }
 
     if (password.length < 6) {
-      setMessage('Password must be at least 6 characters.')
+      setMessage(
+        'Password must be at least 6 characters.'
+      )
       return
     }
 
@@ -285,7 +352,9 @@ function App() {
         password
       )
 
-      setMessage('Account created successfully!')
+      setMessage(
+        'Account created successfully!'
+      )
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -299,11 +368,17 @@ function App() {
     try {
       setLoading(true)
 
-      const provider = new GoogleAuthProvider()
+      const provider =
+        new GoogleAuthProvider()
 
-      await signInWithPopup(auth, provider)
+      await signInWithPopup(
+        auth,
+        provider
+      )
 
-      setMessage('Google login successful!')
+      setMessage(
+        'Google login successful!'
+      )
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -322,7 +397,8 @@ function App() {
     try {
       setLoading(true)
 
-      const code = generateFamilyCode()
+      const code =
+        generateFamilyCode()
 
       await setDoc(
         doc(db, 'families', code),
@@ -335,7 +411,10 @@ function App() {
       )
 
       setFamilyCode(code)
-      setMessage('Family created successfully!')
+
+      setMessage(
+        'Family created successfully!'
+      )
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -351,28 +430,42 @@ function App() {
       return
     }
 
-    const code = joinCode.trim().toUpperCase()
+    const code =
+      joinCode.trim().toUpperCase()
 
     if (code.length !== 6) {
-      setMessage('Please enter the 6-character Family Code.')
+      setMessage(
+        'Please enter the 6-character Family Code.'
+      )
       return
     }
 
     try {
       setLoading(true)
 
-      const familyRef = doc(db, 'families', code)
-      const familySnapshot = await getDoc(familyRef)
+      const familyRef = doc(
+        db,
+        'families',
+        code
+      )
+
+      const familySnapshot =
+        await getDoc(familyRef)
 
       if (!familySnapshot.exists()) {
-        setMessage('Family not found. Check the Family Code.')
+        setMessage(
+          'Family not found. Check the Family Code.'
+        )
         return
       }
 
-      const family = familySnapshot.data()
+      const family =
+        familySnapshot.data()
 
       if (family.parentId === user.uid) {
-        setMessage('You are already the parent of this family.')
+        setMessage(
+          'You are already the parent of this family.'
+        )
         return
       }
 
@@ -393,43 +486,9 @@ function App() {
       )
 
       setFamilyCode(code)
-      setMessage('You joined the family successfully!')
-    } catch (error) {
-      setMessage(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Save Safe Zone
-  const handleSetSafeZone = async (location) => {
-    if (!user || !familyCode) return
-
-    try {
-      setLoading(true)
-
-      const newSafeZone = {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        radius: SAFE_ZONE_RADIUS,
-        updatedAt: serverTimestamp(),
-      }
-
-      await setDoc(
-        doc(db, 'families', familyCode),
-        {
-          safeZone: newSafeZone,
-        },
-        {
-          merge: true,
-        }
-      )
-
-      setSafeZone(newSafeZone)
-      setSettingSafeZone(false)
 
       setMessage(
-        'Safe Zone created successfully — radius 100 meters.'
+        'You joined the family successfully!'
       )
     } catch (error) {
       setMessage(error.message)
@@ -438,34 +497,78 @@ function App() {
     }
   }
 
-  const handleRemoveSafeZone = async () => {
-    if (!user || !familyCode) return
+  // Set Safe Zone
+  const handleSetSafeZone =
+    async (location) => {
+      if (!user || !familyCode) return
 
-    try {
-      setLoading(true)
+      try {
+        setLoading(true)
 
-      await setDoc(
-        doc(db, 'families', familyCode),
-        {
-          safeZone: null,
-        },
-        {
-          merge: true,
+        const newSafeZone = {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          radius: SAFE_ZONE_RADIUS,
+          updatedAt: serverTimestamp(),
         }
-      )
 
-      setSafeZone(null)
-      setSettingSafeZone(false)
+        await setDoc(
+          doc(db, 'families', familyCode),
+          {
+            safeZone: newSafeZone,
+          },
+          {
+            merge: true,
+          }
+        )
 
-      setMessage('Safe Zone removed.')
-    } catch (error) {
-      setMessage(error.message)
-    } finally {
-      setLoading(false)
+        setSafeZone(newSafeZone)
+        setSettingSafeZone(false)
+
+        setMessage(
+          'Safe Zone created — radius 100 meters.'
+        )
+      } catch (error) {
+        setMessage(error.message)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
 
-  const saveLocation = async (position) => {
+  const handleRemoveSafeZone =
+    async () => {
+      if (!user || !familyCode) return
+
+      try {
+        setLoading(true)
+
+        await setDoc(
+          doc(db, 'families', familyCode),
+          {
+            safeZone: null,
+          },
+          {
+            merge: true,
+          }
+        )
+
+        setSafeZone(null)
+        setSettingSafeZone(false)
+
+        setMessage(
+          'Safe Zone removed.'
+        )
+      } catch (error) {
+        setMessage(error.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+  // Save child location
+  const saveLocation = async (
+    position
+  ) => {
     if (!user || !familyCode) return
 
     const now = Date.now()
@@ -484,6 +587,34 @@ function App() {
         accuracy,
       } = position.coords
 
+      let safeZoneStatus =
+        'unknown'
+
+      let distanceFromSafeZone =
+        null
+
+      if (
+        safeZone &&
+        typeof safeZone.latitude ===
+          'number' &&
+        typeof safeZone.longitude ===
+          'number'
+      ) {
+        distanceFromSafeZone =
+          calculateDistance(
+            safeZone.latitude,
+            safeZone.longitude,
+            latitude,
+            longitude
+          )
+
+        safeZoneStatus =
+          distanceFromSafeZone <=
+          SAFE_ZONE_RADIUS
+            ? 'inside'
+            : 'outside'
+      }
+
       await setDoc(
         doc(
           db,
@@ -499,129 +630,182 @@ function App() {
           latitude,
           longitude,
           accuracy,
-          locationUpdatedAt: serverTimestamp(),
+          locationUpdatedAt:
+            serverTimestamp(),
+          safeZoneStatus,
+          distanceFromSafeZone,
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       )
 
       lastSavedRef.current = now
-      setMessage('Location updated successfully!')
+
+      if (
+        safeZoneStatus === 'outside'
+      ) {
+        setMessage(
+          '🚨 You are outside the Safe Zone!'
+        )
+      } else if (
+        safeZoneStatus === 'inside'
+      ) {
+        setMessage(
+          '🟢 You are inside the Safe Zone.'
+        )
+      } else {
+        setMessage(
+          'Location updated successfully!'
+        )
+      }
     } catch (error) {
       setMessage(error.message)
     }
   }
 
-  const handleStartTracking = () => {
-    setMessage('')
+  const handleStartTracking =
+    () => {
+      setMessage('')
 
-    if (!user) {
-      setMessage('Please login first.')
-      return
-    }
+      if (!user) {
+        setMessage(
+          'Please login first.'
+        )
+        return
+      }
 
-    if (!familyCode) {
-      setMessage('You are not connected to a family.')
-      return
-    }
+      if (!familyCode) {
+        setMessage(
+          'You are not connected to a family.'
+        )
+        return
+      }
 
-    if (!navigator.geolocation) {
-      setMessage(
-        'Location is not supported by this browser.'
-      )
-      return
-    }
+      if (!navigator.geolocation) {
+        setMessage(
+          'Location is not supported by this browser.'
+        )
+        return
+      }
 
-    if (isTracking) return
+      if (isTracking) return
 
-    setLoading(true)
+      setLoading(true)
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          await saveLocation(position)
-
-          const watchId =
-            navigator.geolocation.watchPosition(
-              async (newPosition) => {
-                await saveLocation(newPosition)
-              },
-              (error) => {
-                if (error.code === 1) {
-                  setMessage(
-                    'Location permission was denied.'
-                  )
-                } else if (error.code === 2) {
-                  setMessage(
-                    'Location is unavailable.'
-                  )
-                } else {
-                  setMessage(
-                    'Unable to update location.'
-                  )
-                }
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 10000,
-              }
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            await saveLocation(
+              position
             )
 
-          watchIdRef.current = watchId
-          setIsTracking(true)
+            const watchId =
+              navigator.geolocation.watchPosition(
+                async (
+                  newPosition
+                ) => {
+                  await saveLocation(
+                    newPosition
+                  )
+                },
+                (error) => {
+                  if (
+                    error.code === 1
+                  ) {
+                    setMessage(
+                      'Location permission was denied.'
+                    )
+                  } else if (
+                    error.code === 2
+                  ) {
+                    setMessage(
+                      'Location is unavailable.'
+                    )
+                  } else {
+                    setMessage(
+                      'Unable to update location.'
+                    )
+                  }
+                },
+                {
+                  enableHighAccuracy:
+                    true,
+                  timeout: 15000,
+                  maximumAge: 10000,
+                }
+              )
 
-          setMessage(
-            'Live location tracking started!'
-          )
-        } catch (error) {
-          setMessage(error.message)
-        } finally {
+            watchIdRef.current =
+              watchId
+
+            setIsTracking(true)
+
+            setMessage(
+              'Live location tracking started!'
+            )
+          } catch (error) {
+            setMessage(
+              error.message
+            )
+          } finally {
+            setLoading(false)
+          }
+        },
+        (error) => {
           setLoading(false)
-        }
-      },
-      (error) => {
-        setLoading(false)
 
-        if (error.code === 1) {
-          setMessage(
-            'Location permission was denied.'
-          )
-        } else if (error.code === 2) {
-          setMessage(
-            'Location is unavailable.'
-          )
-        } else {
-          setMessage(
-            'Unable to get your location.'
-          )
+          if (error.code === 1) {
+            setMessage(
+              'Location permission was denied.'
+            )
+          } else if (
+            error.code === 2
+          ) {
+            setMessage(
+              'Location is unavailable.'
+            )
+          } else {
+            setMessage(
+              'Unable to get your location.'
+            )
+          }
+        },
+        {
+          enableHighAccuracy:
+            true,
+          timeout: 15000,
+          maximumAge: 0,
         }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      }
-    )
-  }
-
-  const handleStopTracking = () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(
-        watchIdRef.current
       )
-
-      watchIdRef.current = null
     }
 
-    setIsTracking(false)
+  const handleStopTracking =
+    () => {
+      if (
+        watchIdRef.current !==
+        null
+      ) {
+        navigator.geolocation.clearWatch(
+          watchIdRef.current
+        )
 
-    setMessage(
-      'Live location tracking stopped.'
-    )
-  }
+        watchIdRef.current =
+          null
+      }
+
+      setIsTracking(false)
+
+      setMessage(
+        'Live location tracking stopped.'
+      )
+    }
 
   const handleLogout = async () => {
-    if (watchIdRef.current !== null) {
+    if (
+      watchIdRef.current !==
+      null
+    ) {
       navigator.geolocation.clearWatch(
         watchIdRef.current
       )
@@ -647,7 +831,8 @@ function App() {
       padding: '25px 15px',
       background:
         'linear-gradient(180deg, #eff6ff 0%, #f8fafc 45%, #f1f5f9 100%)',
-      fontFamily: 'Arial, sans-serif',
+      fontFamily:
+        'Arial, sans-serif',
     },
 
     container: {
@@ -662,7 +847,8 @@ function App() {
       padding: '24px',
       boxShadow:
         '0 12px 35px rgba(15,23,42,0.08)',
-      border: '1px solid #e2e8f0',
+      border:
+        '1px solid #e2e8f0',
     },
 
     authCard: {
@@ -690,7 +876,8 @@ function App() {
       padding: '14px',
       marginBottom: '12px',
       borderRadius: '12px',
-      border: '1px solid #cbd5e1',
+      border:
+        '1px solid #cbd5e1',
       fontSize: '16px',
       outline: 'none',
     },
@@ -713,7 +900,8 @@ function App() {
       padding: '14px',
       marginBottom: '10px',
       borderRadius: '12px',
-      border: '1px solid #cbd5e1',
+      border:
+        '1px solid #cbd5e1',
       background: '#fff',
       color: '#0f172a',
       fontSize: '16px',
@@ -738,7 +926,8 @@ function App() {
       padding: '18px',
       marginBottom: '12px',
       borderRadius: '16px',
-      border: '1px solid #dbeafe',
+      border:
+        '1px solid #dbeafe',
       background: '#f8fbff',
       fontSize: '18px',
       fontWeight: 'bold',
@@ -748,7 +937,8 @@ function App() {
 
     header: {
       display: 'flex',
-      justifyContent: 'space-between',
+      justifyContent:
+        'space-between',
       alignItems: 'center',
       gap: '15px',
       marginBottom: '24px',
@@ -761,15 +951,18 @@ function App() {
     },
 
     userText: {
-      margin: '5px 0 0',
+      margin:
+        '5px 0 0',
       color: '#64748b',
       fontSize: '14px',
     },
 
     logoutButton: {
-      padding: '10px 18px',
+      padding:
+        '10px 18px',
       borderRadius: '10px',
-      border: '1px solid #fecaca',
+      border:
+        '1px solid #fecaca',
       background: '#fff',
       color: '#dc2626',
       cursor: 'pointer',
@@ -788,7 +981,8 @@ function App() {
       padding: '18px',
       borderRadius: '16px',
       background: '#f8fafc',
-      border: '1px solid #e2e8f0',
+      border:
+        '1px solid #e2e8f0',
     },
 
     statNumber: {
@@ -820,7 +1014,8 @@ function App() {
     },
 
     sectionTitle: {
-      margin: '0 0 15px',
+      margin:
+        '0 0 15px',
       fontSize: '21px',
     },
 
@@ -829,7 +1024,8 @@ function App() {
       padding: '18px',
       borderRadius: '18px',
       background: '#fff',
-      border: '1px solid #e2e8f0',
+      border:
+        '1px solid #e2e8f0',
       boxShadow:
         '0 5px 18px rgba(15,23,42,0.05)',
     },
@@ -854,13 +1050,36 @@ function App() {
 
     status: {
       display: 'inline-block',
-      padding: '5px 10px',
+      padding:
+        '5px 10px',
       borderRadius: '20px',
       background: '#dcfce7',
       color: '#166534',
       fontSize: '12px',
       fontWeight: 'bold',
       marginTop: '4px',
+    },
+
+    safeStatusInside: {
+      padding: '12px',
+      borderRadius: '12px',
+      background: '#dcfce7',
+      color: '#166534',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginTop: '12px',
+    },
+
+    safeStatusOutside: {
+      padding: '14px',
+      borderRadius: '12px',
+      background: '#fee2e2',
+      color: '#991b1b',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginTop: '12px',
+      border:
+        '1px solid #fecaca',
     },
 
     noLocation: {
@@ -875,7 +1094,8 @@ function App() {
       padding: '22px',
       borderRadius: '18px',
       background: '#f8fafc',
-      border: '1px solid #e2e8f0',
+      border:
+        '1px solid #e2e8f0',
       textAlign: 'center',
       marginTop: '20px',
     },
@@ -893,7 +1113,8 @@ function App() {
       padding: '18px',
       borderRadius: '18px',
       background: '#f0fdf4',
-      border: '1px solid #bbf7d0',
+      border:
+        '1px solid #bbf7d0',
       marginBottom: '22px',
     },
 
@@ -934,14 +1155,18 @@ function App() {
 
           <button
             style={styles.roleButton}
-            onClick={() => setRole('parent')}
+            onClick={() =>
+              setRole('parent')
+            }
           >
             👨‍👩‍👧 Parent
           </button>
 
           <button
             style={styles.roleButton}
-            onClick={() => setRole('child')}
+            onClick={() =>
+              setRole('child')
+            }
           >
             👦 Child
           </button>
@@ -975,7 +1200,9 @@ function App() {
             placeholder="Email"
             value={email}
             onChange={(e) =>
-              setEmail(e.target.value)
+              setEmail(
+                e.target.value
+              )
             }
           />
 
@@ -985,36 +1212,52 @@ function App() {
             placeholder="Password"
             value={password}
             onChange={(e) =>
-              setPassword(e.target.value)
+              setPassword(
+                e.target.value
+              )
             }
           />
 
           <button
             style={styles.button}
-            onClick={handleEmailLogin}
+            onClick={
+              handleEmailLogin
+            }
             disabled={loading}
           >
-            {loading ? 'Please wait...' : 'Login'}
+            {loading
+              ? 'Please wait...'
+              : 'Login'}
           </button>
 
           <button
-            style={styles.secondaryButton}
-            onClick={handleSignup}
+            style={
+              styles.secondaryButton
+            }
+            onClick={
+              handleSignup
+            }
             disabled={loading}
           >
             Create Account
           </button>
 
           <button
-            style={styles.secondaryButton}
-            onClick={handleGoogleLogin}
+            style={
+              styles.secondaryButton
+            }
+            onClick={
+              handleGoogleLogin
+            }
             disabled={loading}
           >
             Continue with Google
           </button>
 
           <button
-            style={styles.secondaryButton}
+            style={
+              styles.secondaryButton
+            }
             onClick={() => {
               setRole('')
               setMessage('')
@@ -1024,7 +1267,9 @@ function App() {
           </button>
 
           {message && (
-            <div style={styles.message}>
+            <div
+              style={styles.message}
+            >
               {message}
             </div>
           )}
@@ -1040,8 +1285,10 @@ function App() {
           style={{
             ...styles.card,
             maxWidth: '600px',
-            margin: '70px auto',
-            textAlign: 'center',
+            margin:
+              '70px auto',
+            textAlign:
+              'center',
           }}
         >
           <div style={styles.logo}>
@@ -1062,18 +1309,30 @@ function App() {
         <div style={styles.card}>
           <div style={styles.header}>
             <div>
-              <h1 style={styles.headerTitle}>
+              <h1
+                style={
+                  styles.headerTitle
+                }
+              >
                 🏠 FamilyTrack
               </h1>
 
-              <p style={styles.userText}>
+              <p
+                style={
+                  styles.userText
+                }
+              >
                 {user.email}
               </p>
             </div>
 
             <button
-              style={styles.logoutButton}
-              onClick={handleLogout}
+              style={
+                styles.logoutButton
+              }
+              onClick={
+                handleLogout
+              }
             >
               Logout
             </button>
@@ -1081,36 +1340,56 @@ function App() {
 
           {role === 'parent' ? (
             <>
-              <h2 style={styles.sectionTitle}>
+              <h2
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Parent Dashboard
               </h2>
 
               {!familyCode ? (
-                <div style={styles.trackingBox}>
+                <div
+                  style={
+                    styles.trackingBox
+                  }
+                >
                   <div
                     style={{
                       fontSize: '45px',
-                      marginBottom: '10px',
+                      marginBottom:
+                        '10px',
                     }}
                   >
                     👨‍👩‍👧‍👦
                   </div>
 
-                  <h3>Create your family</h3>
+                  <h3>
+                    Create your family
+                  </h3>
 
                   <p
                     style={{
-                      color: '#64748b',
+                      color:
+                        '#64748b',
                     }}
                   >
-                    Create a family and invite your
-                    children with a simple code.
+                    Create a family
+                    and invite your
+                    children with a
+                    simple code.
                   </p>
 
                   <button
-                    style={styles.button}
-                    onClick={handleCreateFamily}
-                    disabled={loading}
+                    style={
+                      styles.button
+                    }
+                    onClick={
+                      handleCreateFamily
+                    }
+                    disabled={
+                      loading
+                    }
                   >
                     {loading
                       ? 'Creating...'
@@ -1119,60 +1398,114 @@ function App() {
                 </div>
               ) : (
                 <>
-                  <div style={styles.statGrid}>
-                    <div style={styles.stat}>
-                      <div style={styles.statNumber}>
-                        {children.length}
+                  <div
+                    style={
+                      styles.statGrid
+                    }
+                  >
+                    <div
+                      style={
+                        styles.stat
+                      }
+                    >
+                      <div
+                        style={
+                          styles.statNumber
+                        }
+                      >
+                        {
+                          children.length
+                        }
                       </div>
 
-                      <div style={styles.statLabel}>
+                      <div
+                        style={
+                          styles.statLabel
+                        }
+                      >
                         Children
                       </div>
                     </div>
 
-                    <div style={styles.stat}>
-                      <div style={styles.statNumber}>
+                    <div
+                      style={
+                        styles.stat
+                      }
+                    >
+                      <div
+                        style={
+                          styles.statNumber
+                        }
+                      >
                         {
                           children.filter(
-                            (child) =>
+                            (
+                              child
+                            ) =>
                               child.latitude &&
                               child.longitude
                           ).length
                         }
                       </div>
 
-                      <div style={styles.statLabel}>
-                        Locations shared
+                      <div
+                        style={
+                          styles.statLabel
+                        }
+                      >
+                        Locations
+                        shared
                       </div>
                     </div>
                   </div>
 
-                  <div style={styles.familyBox}>
+                  <div
+                    style={
+                      styles.familyBox
+                    }
+                  >
                     <div
                       style={{
-                        color: '#475569',
+                        color:
+                          '#475569',
                       }}
                     >
-                      Your Family Code
+                      Your Family
+                      Code
                     </div>
 
-                    <div style={styles.code}>
+                    <div
+                      style={
+                        styles.code
+                      }
+                    >
                       {familyCode}
                     </div>
 
                     <div
                       style={{
-                        color: '#475569',
-                        fontSize: '14px',
+                        color:
+                          '#475569',
+                        fontSize:
+                          '14px',
                       }}
                     >
-                      Give this code to your children
+                      Give this
+                      code to your
+                      children
                     </div>
                   </div>
 
-                  {/* SAFE ZONE */}
-                  <div style={styles.safeZoneBox}>
-                    <div style={styles.safeZoneTitle}>
+                  <div
+                    style={
+                      styles.safeZoneBox
+                    }
+                  >
+                    <div
+                      style={
+                        styles.safeZoneTitle
+                      }
+                    >
                       🟢 Safe Zone
                     </div>
 
@@ -1180,256 +1513,365 @@ function App() {
                       <>
                         <p
                           style={{
-                            color: '#475569',
-                            marginTop: 0,
+                            color:
+                              '#475569',
+                            marginTop:
+                              0,
                           }}
                         >
-                          No Safe Zone has been set.
-                          The Safe Zone radius will be
-                          exactly 100 meters.
+                          No Safe Zone
+                          has been set.
+                          Radius:
+                          <strong>
+                            {' '}
+                            100 meters
+                          </strong>
                         </p>
 
                         <button
-                          style={styles.button}
+                          style={
+                            styles.button
+                          }
                           onClick={() => {
-                            setSettingSafeZone(true)
+                            setSettingSafeZone(
+                              true
+                            )
+
                             setMessage(
                               'Click on the map to choose the Safe Zone center.'
                             )
                           }}
                         >
-                          📍 Set Safe Zone
+                          📍 Set Safe
+                          Zone
                         </button>
                       </>
                     ) : (
                       <>
                         <p
                           style={{
-                            color: '#166534',
-                            marginTop: 0,
+                            color:
+                              '#166534',
+                            marginTop:
+                              0,
                           }}
                         >
-                          Safe Zone is active.
+                          Safe Zone is
+                          active.
                           <br />
-                          Radius: <strong>100 meters</strong>
+                          Radius:{' '}
+                          <strong>
+                            100 meters
+                          </strong>
                         </p>
 
                         <button
-                          style={styles.secondaryButton}
+                          style={
+                            styles.secondaryButton
+                          }
                           onClick={() => {
-                            setSettingSafeZone(true)
+                            setSettingSafeZone(
+                              true
+                            )
+
                             setMessage(
                               'Click on the map to move the Safe Zone.'
                             )
                           }}
                         >
-                          📍 Change Safe Zone
+                          📍 Change Safe
+                          Zone
                         </button>
 
                         <button
-                          style={styles.stopButton}
-                          onClick={handleRemoveSafeZone}
-                          disabled={loading}
+                          style={
+                            styles.stopButton
+                          }
+                          onClick={
+                            handleRemoveSafeZone
+                          }
+                          disabled={
+                            loading
+                          }
                         >
-                          Remove Safe Zone
+                          Remove Safe
+                          Zone
                         </button>
                       </>
                     )}
                   </div>
 
-                  <h2 style={styles.sectionTitle}>
+                  <h2
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
                     👨‍👩‍👧‍👦 Family Members
                   </h2>
 
-                  {children.length === 0 ? (
-                    <div style={styles.noLocation}>
-                      No children have joined yet.
+                  {children.length ===
+                  0 ? (
+                    <div
+                      style={
+                        styles.noLocation
+                      }
+                    >
+                      No children have
+                      joined yet.
                     </div>
                   ) : (
-                    children.map((child) => (
-                      <div
-                        key={child.id}
-                        style={styles.childCard}
-                      >
+                    children.map(
+                      (child) => (
                         <div
-                          style={styles.childHeader}
+                          key={
+                            child.id
+                          }
+                          style={
+                            styles.childCard
+                          }
                         >
-                          <div style={styles.avatar}>
-                            👦
-                          </div>
-
-                          <div>
-                            <strong>Child</strong>
-
+                          <div
+                            style={
+                              styles.childHeader
+                            }
+                          >
                             <div
-                              style={{
-                                color: '#64748b',
-                                fontSize: '14px',
-                                marginTop: '3px',
-                              }}
+                              style={
+                                styles.avatar
+                              }
                             >
-                              {child.email}
+                              👦
                             </div>
 
-                            {child.latitude &&
-                            child.longitude ? (
-                              <div
-                                style={styles.status}
-                              >
-                                🟢 Location available
-                              </div>
-                            ) : (
+                            <div>
+                              <strong>
+                                Child
+                              </strong>
+
                               <div
                                 style={{
-                                  ...styles.status,
-                                  background:
-                                    '#f1f5f9',
-                                  color: '#64748b',
+                                  color:
+                                    '#64748b',
+                                  fontSize:
+                                    '14px',
+                                  marginTop:
+                                    '3px',
                                 }}
                               >
-                                ⚪ No location
+                                {
+                                  child.email
+                                }
                               </div>
-                            )}
+                            </div>
                           </div>
-                        </div>
 
-                        {child.latitude &&
-                        child.longitude ? (
-                          <>
-                            <MapContainer
-                              center={[
-                                child.latitude,
-                                child.longitude,
-                              ]}
-                              zoom={15}
-                              scrollWheelZoom={true}
-                            >
-                              <TileLayer
-                                attribution="&copy; OpenStreetMap contributors"
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                              />
-
-                              {settingSafeZone && (
-                                <LocationPicker
-                                  onPick={
-                                    handleSetSafeZone
-                                  }
-                                />
-                              )}
-
-                              {safeZone && (
-                                <Circle
-                                  center={[
-                                    safeZone.latitude,
-                                    safeZone.longitude,
-                                  ]}
-                                  radius={
-                                    SAFE_ZONE_RADIUS
-                                  }
-                                />
-                              )}
-
-                              <Marker
-                                position={[
+                          {child.latitude &&
+                          child.longitude ? (
+                            <>
+                              <MapContainer
+                                center={[
                                   child.latitude,
                                   child.longitude,
                                 ]}
+                                zoom={
+                                  15
+                                }
+                                scrollWheelZoom={
+                                  true
+                                }
                               >
-                                <Popup>
-                                  👦 Child location
-                                  <br />
-                                  Accuracy:{' '}
-                                  {Math.round(
-                                    child.accuracy || 0
-                                  )}{' '}
-                                  meters
-                                </Popup>
-                              </Marker>
-                            </MapContainer>
+                                <TileLayer
+                                  attribution="&copy; OpenStreetMap contributors"
+                                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
 
-                            {settingSafeZone && (
+                                {settingSafeZone && (
+                                  <LocationPicker
+                                    onPick={
+                                      handleSetSafeZone
+                                    }
+                                  />
+                                )}
+
+                                {safeZone && (
+                                  <Circle
+                                    center={[
+                                      safeZone.latitude,
+                                      safeZone.longitude,
+                                    ]}
+                                    radius={
+                                      SAFE_ZONE_RADIUS
+                                    }
+                                  />
+                                )}
+
+                                <Marker
+                                  position={[
+                                    child.latitude,
+                                    child.longitude,
+                                  ]}
+                                >
+                                  <Popup>
+                                    👦 Child
+                                    location
+                                    <br />
+                                    Accuracy:{' '}
+                                    {Math.round(
+                                      child.accuracy ||
+                                        0
+                                    )}{' '}
+                                    meters
+                                  </Popup>
+                                </Marker>
+                              </MapContainer>
+
+                              {child.safeZoneStatus ===
+                                'outside' &&
+                                safeZone && (
+                                  <div
+                                    style={
+                                      styles.safeStatusOutside
+                                    }
+                                  >
+                                    🚨 ALERT: Child
+                                    is outside the
+                                    Safe Zone!
+                                    <br />
+                                    Distance:{' '}
+                                    {Math.round(
+                                      child.distanceFromSafeZone ||
+                                        0
+                                    )}{' '}
+                                    meters
+                                  </div>
+                                )}
+
+                              {child.safeZoneStatus ===
+                                'inside' &&
+                                safeZone && (
+                                  <div
+                                    style={
+                                      styles.safeStatusInside
+                                    }
+                                  >
+                                    🟢 Child is inside
+                                    the Safe Zone
+                                  </div>
+                                )}
+
+                              {settingSafeZone && (
+                                <div
+                                  style={{
+                                    marginTop:
+                                      '10px',
+                                    padding:
+                                      '12px',
+                                    borderRadius:
+                                      '12px',
+                                    background:
+                                      '#dbeafe',
+                                    color:
+                                      '#1e40af',
+                                    textAlign:
+                                      'center',
+                                    fontWeight:
+                                      'bold',
+                                  }}
+                                >
+                                  👆 Click on the
+                                  map to set the
+                                  100-meter Safe
+                                  Zone
+                                </div>
+                              )}
+
                               <div
                                 style={{
-                                  marginTop: '10px',
-                                  padding: '12px',
-                                  borderRadius: '12px',
-                                  background:
-                                    '#dbeafe',
+                                  marginTop:
+                                    '10px',
                                   color:
-                                    '#1e40af',
-                                  textAlign:
-                                    'center',
-                                  fontWeight:
-                                    'bold',
+                                    '#64748b',
+                                  fontSize:
+                                    '13px',
                                 }}
                               >
-                                👆 Click anywhere on
-                                the map to set the
-                                100-meter Safe Zone
+                                📍 Accuracy:{' '}
+                                {Math.round(
+                                  child.accuracy ||
+                                    0
+                                )}{' '}
+                                meters
                               </div>
-                            )}
-
+                            </>
+                          ) : (
                             <div
-                              style={{
-                                marginTop: '10px',
-                                color: '#64748b',
-                                fontSize: '13px',
-                              }}
+                              style={
+                                styles.noLocation
+                              }
                             >
-                              📍 Accuracy:{' '}
-                              {Math.round(
-                                child.accuracy || 0
-                              )}{' '}
-                              meters
+                              📍 Waiting for
+                              location
                             </div>
-                          </>
-                        ) : (
-                          <div
-                            style={styles.noLocation}
-                          >
-                            📍 Waiting for location
-                          </div>
-                        )}
-                      </div>
-                    ))
+                          )}
+                        </div>
+                      )
+                    )
                   )}
                 </>
               )}
             </>
           ) : (
             <>
-              <h2 style={styles.sectionTitle}>
+              <h2
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Child Dashboard
               </h2>
 
               {!familyCode ? (
-                <div style={styles.trackingBox}>
+                <div
+                  style={
+                    styles.trackingBox
+                  }
+                >
                   <div
                     style={{
-                      fontSize: '45px',
-                      marginBottom: '10px',
+                      fontSize:
+                        '45px',
+                      marginBottom:
+                        '10px',
                     }}
                   >
                     👨‍👩‍👧‍👦
                   </div>
 
-                  <h3>Join your family</h3>
+                  <h3>
+                    Join your family
+                  </h3>
 
                   <p
                     style={{
-                      color: '#64748b',
+                      color:
+                        '#64748b',
                     }}
                   >
-                    Enter the Family Code from your
+                    Enter the Family
+                    Code from your
                     parent.
                   </p>
 
                   <input
-                    style={styles.input}
+                    style={
+                      styles.input
+                    }
                     type="text"
                     maxLength="6"
                     placeholder="Family Code"
-                    value={joinCode}
+                    value={
+                      joinCode
+                    }
                     onChange={(e) =>
                       setJoinCode(
                         e.target.value.toUpperCase()
@@ -1438,9 +1880,15 @@ function App() {
                   />
 
                   <button
-                    style={styles.button}
-                    onClick={handleJoinFamily}
-                    disabled={loading}
+                    style={
+                      styles.button
+                    }
+                    onClick={
+                      handleJoinFamily
+                    }
+                    disabled={
+                      loading
+                    }
                   >
                     {loading
                       ? 'Joining...'
@@ -1449,95 +1897,138 @@ function App() {
                 </div>
               ) : (
                 <>
-                  <div style={styles.familyBox}>
+                  <div
+                    style={
+                      styles.familyBox
+                    }
+                  >
                     <div
                       style={{
-                        color: '#475569',
+                        color:
+                          '#475569',
                       }}
                     >
-                      Connected to family
+                      Connected to
+                      family
                     </div>
 
-                    <div style={styles.code}>
+                    <div
+                      style={
+                        styles.code
+                      }
+                    >
                       {familyCode}
                     </div>
                   </div>
 
                   {safeZone && (
-                    <div style={styles.safeZoneBox}>
+                    <div
+                      style={
+                        styles.safeZoneBox
+                      }
+                    >
                       <div
-                        style={styles.safeZoneTitle}
+                        style={
+                          styles.safeZoneTitle
+                        }
                       >
                         🟢 Safe Zone Active
                       </div>
 
                       <div
                         style={{
-                          color: '#166534',
+                          color:
+                            '#166534',
                         }}
                       >
-                        Your family Safe Zone radius
-                        is{' '}
-                        <strong>100 meters</strong>.
+                        Radius:{' '}
+                        <strong>
+                          100 meters
+                        </strong>
                       </div>
                     </div>
                   )}
 
-                  <div style={styles.trackingBox}>
+                  <div
+                    style={
+                      styles.trackingBox
+                    }
+                  >
                     {isTracking ? (
                       <>
-                        <div style={styles.active}>
-                          🟢 Live location is active
+                        <div
+                          style={
+                            styles.active
+                          }
+                        >
+                          🟢 Live location
+                          is active
                         </div>
 
                         <p
                           style={{
-                            color: '#64748b',
+                            color:
+                              '#64748b',
                           }}
                         >
-                          Your location is being
-                          shared with your parent.
+                          Your location
+                          is being shared
+                          with your
+                          parent.
                         </p>
 
                         <button
-                          style={styles.stopButton}
+                          style={
+                            styles.stopButton
+                          }
                           onClick={
                             handleStopTracking
                           }
                         >
-                          🛑 Stop Location Sharing
+                          🛑 Stop Location
+                          Sharing
                         </button>
                       </>
                     ) : (
                       <>
                         <div
                           style={{
-                            fontSize: '50px',
-                            marginBottom: '10px',
+                            fontSize:
+                              '50px',
+                            marginBottom:
+                              '10px',
                           }}
                         >
                           📍
                         </div>
 
                         <h3>
-                          Share your location
+                          Share your
+                          location
                         </h3>
 
                         <p
                           style={{
-                            color: '#64748b',
+                            color:
+                              '#64748b',
                           }}
                         >
-                          Allow your parent to see
-                          your current location.
+                          Allow your
+                          parent to see
+                          your current
+                          location.
                         </p>
 
                         <button
-                          style={styles.button}
+                          style={
+                            styles.button
+                          }
                           onClick={
                             handleStartTracking
                           }
-                          disabled={loading}
+                          disabled={
+                            loading
+                          }
                         >
                           {loading
                             ? 'Starting...'
@@ -1552,7 +2043,11 @@ function App() {
           )}
 
           {message && (
-            <div style={styles.message}>
+            <div
+              style={
+                styles.message
+              }
+            >
               {message}
             </div>
           )}
