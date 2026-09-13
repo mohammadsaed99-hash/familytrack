@@ -1,62 +1,98 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
   signInWithPopup,
+  signOut,
 } from 'firebase/auth'
+
 import {
   doc,
-  setDoc,
+  getDoc,
   serverTimestamp,
+  setDoc,
 } from 'firebase/firestore'
+
 import { auth, db } from './firebase'
 
 function generateFamilyCode() {
-  const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
 
   for (let i = 0; i < 6; i++) {
-    code += characters.charAt(
-      Math.floor(Math.random() * characters.length)
-    )
+    code += chars[Math.floor(Math.random() * chars.length)]
   }
 
   return code
 }
 
 function App() {
-  const [role, setRole] = useState(null)
-  const [mode, setMode] = useState('login')
+  const [role, setRole] = useState('')
+  const [user, setUser] = useState(null)
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
-  const [user, setUser] = useState(null)
-  const [familyCode, setFamilyCode] = useState('')
 
-  const handleEmailAuth = async () => {
+  const [familyCode, setFamilyCode] = useState('')
+  const [joinCode, setJoinCode] = useState('')
+
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useState(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser)
+    })
+
+    return unsubscribe
+  })
+
+  const handleEmailLogin = async () => {
     setMessage('')
 
+    if (!email || !password) {
+      setMessage('Please enter email and password.')
+      return
+    }
+
     try {
-      if (mode === 'login') {
-        const result = await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        )
+      setLoading(true)
 
-        setUser(result.user)
-      } else {
-        const result = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        )
+      await signInWithEmailAndPassword(auth, email, password)
 
-        setUser(result.user)
-      }
+      setMessage('Login successful!')
     } catch (error) {
       setMessage(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSignup = async () => {
+    setMessage('')
+
+    if (!email || !password) {
+      setMessage('Please enter email and password.')
+      return
+    }
+
+    if (password.length < 6) {
+      setMessage('Password must be at least 6 characters.')
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      await createUserWithEmailAndPassword(auth, email, password)
+
+      setMessage('Account created successfully!')
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -64,23 +100,30 @@ function App() {
     setMessage('')
 
     try {
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
+      setLoading(true)
 
-      setUser(result.user)
+      const provider = new GoogleAuthProvider()
+
+      await signInWithPopup(auth, provider)
+
+      setMessage('Google login successful!')
     } catch (error) {
       setMessage(error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleCreateFamily = async () => {
     setMessage('')
 
+    if (!user) {
+      setMessage('Please login first.')
+      return
+    }
+
     try {
-      if (!user) {
-        setMessage('Please login first.')
-        return
-      }
+      setLoading(true)
 
       const code = generateFamilyCode()
 
@@ -89,120 +132,220 @@ function App() {
         parentId: user.uid,
         parentEmail: user.email,
         createdAt: serverTimestamp(),
-        children: [],
       })
 
       setFamilyCode(code)
       setMessage('Family created successfully!')
     } catch (error) {
       setMessage(error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleLogout = () => {
+  const handleJoinFamily = async () => {
+    setMessage('')
+
+    if (!user) {
+      setMessage('Please login first.')
+      return
+    }
+
+    const code = joinCode.trim().toUpperCase()
+
+    if (code.length !== 6) {
+      setMessage('Please enter the 6-character Family Code.')
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const familyRef = doc(db, 'families', code)
+      const familySnapshot = await getDoc(familyRef)
+
+      if (!familySnapshot.exists()) {
+        setMessage('Family not found. Check the Family Code.')
+        return
+      }
+
+      const family = familySnapshot.data()
+
+      if (family.parentId === user.uid) {
+        setMessage('You are already the parent of this family.')
+        return
+      }
+
+      await setDoc(
+        doc(db, 'families', code, 'members', user.uid),
+        {
+          userId: user.uid,
+          email: user.email,
+          role: 'child',
+          joinedAt: serverTimestamp(),
+        }
+      )
+
+      setFamilyCode(code)
+      setMessage('You joined the family successfully!')
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    await signOut(auth)
+
     setUser(null)
     setFamilyCode('')
+    setJoinCode('')
     setMessage('')
   }
 
-  if (user) {
+  const styles = {
+    page: {
+      minHeight: '100vh',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: '20px',
+      background: '#f5f7fa',
+      fontFamily: 'Arial, sans-serif',
+    },
+
+    card: {
+      width: '100%',
+      maxWidth: '450px',
+      background: '#ffffff',
+      borderRadius: '18px',
+      padding: '30px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+    },
+
+    title: {
+      textAlign: 'center',
+      marginBottom: '10px',
+      color: '#222',
+    },
+
+    subtitle: {
+      textAlign: 'center',
+      color: '#666',
+      marginBottom: '25px',
+    },
+
+    input: {
+      width: '100%',
+      padding: '13px',
+      marginBottom: '12px',
+      borderRadius: '10px',
+      border: '1px solid #ddd',
+      fontSize: '16px',
+    },
+
+    button: {
+      width: '100%',
+      padding: '13px',
+      marginBottom: '10px',
+      borderRadius: '10px',
+      border: 'none',
+      background: '#2563eb',
+      color: '#fff',
+      fontSize: '16px',
+      cursor: 'pointer',
+    },
+
+    secondaryButton: {
+      width: '100%',
+      padding: '13px',
+      marginBottom: '10px',
+      borderRadius: '10px',
+      border: '1px solid #ddd',
+      background: '#fff',
+      color: '#222',
+      fontSize: '16px',
+      cursor: 'pointer',
+    },
+
+    roleButton: {
+      width: '100%',
+      padding: '15px',
+      marginBottom: '12px',
+      borderRadius: '12px',
+      border: '1px solid #ddd',
+      background: '#fff',
+      fontSize: '17px',
+      cursor: 'pointer',
+    },
+
+    message: {
+      marginTop: '15px',
+      padding: '12px',
+      background: '#f1f5f9',
+      borderRadius: '10px',
+      color: '#333',
+      wordBreak: 'break-word',
+    },
+
+    code: {
+      textAlign: 'center',
+      fontSize: '32px',
+      fontWeight: 'bold',
+      letterSpacing: '5px',
+      padding: '20px',
+      background: '#eff6ff',
+      borderRadius: '12px',
+      color: '#1d4ed8',
+      margin: '15px 0',
+    },
+
+    section: {
+      marginTop: '25px',
+      paddingTop: '20px',
+      borderTop: '1px solid #eee',
+    },
+  }
+
+  if (!role) {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <div style={styles.logo}>📍</div>
-
           <h1 style={styles.title}>FamilyTrack</h1>
-
           <p style={styles.subtitle}>
-            Family safety made simple
+            Family safety and location tracking
           </p>
 
-          <h2 style={styles.question}>
-            {role === 'parent'
-              ? 'Parent Dashboard'
-              : 'Child Dashboard'}
-          </h2>
-
-          <div style={styles.dashboardBox}>
-            <p style={styles.dashboardTitle}>
-              Welcome!
-            </p>
-
-            <p style={styles.dashboardText}>
-              {user.email}
-            </p>
-          </div>
-
-          {role === 'parent' && (
-            <>
-              {!familyCode ? (
-                <button
-                  style={styles.button}
-                  onClick={handleCreateFamily}
-                >
-                  🏠 Create Family
-                </button>
-              ) : (
-                <div style={styles.familyBox}>
-                  <p style={styles.familyTitle}>
-                    Your Family Code
-                  </p>
-
-                  <div style={styles.familyCode}>
-                    {familyCode}
-                  </div>
-
-                  <p style={styles.familyText}>
-                    Give this code to your child to join
-                    your family.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-
-          {message && (
-            <p
-              style={
-                message.includes('successfully')
-                  ? styles.successMessage
-                  : styles.message
-              }
-            >
-              {message}
-            </p>
-          )}
+          <button
+            style={styles.roleButton}
+            onClick={() => setRole('parent')}
+          >
+            👨 Parent
+          </button>
 
           <button
-            style={styles.button}
-            onClick={handleLogout}
+            style={styles.roleButton}
+            onClick={() => setRole('child')}
           >
-            Logout
+            👦 Child
           </button>
         </div>
       </div>
     )
   }
 
-  if (role) {
+  if (!user) {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <div style={styles.logo}>📍</div>
-
           <h1 style={styles.title}>FamilyTrack</h1>
 
           <p style={styles.subtitle}>
             {role === 'parent'
-              ? 'Parent Account'
-              : 'Child Account'}
+              ? 'Parent Login'
+              : 'Child Login'}
           </p>
-
-          <h2 style={styles.question}>
-            {mode === 'login'
-              ? 'Login'
-              : 'Create Account'}
-          </h2>
 
           <input
             style={styles.input}
@@ -222,52 +365,43 @@ function App() {
 
           <button
             style={styles.button}
-            onClick={handleEmailAuth}
+            onClick={handleEmailLogin}
+            disabled={loading}
           >
-            {mode === 'login'
-              ? 'Login'
-              : 'Create Account'}
+            {loading ? 'Please wait...' : 'Login'}
           </button>
 
           <button
-            style={styles.googleButton}
+            style={styles.secondaryButton}
+            onClick={handleSignup}
+            disabled={loading}
+          >
+            Create Account
+          </button>
+
+          <button
+            style={styles.secondaryButton}
             onClick={handleGoogleLogin}
+            disabled={loading}
           >
             Continue with Google
           </button>
 
+          <button
+            style={styles.secondaryButton}
+            onClick={() => {
+              setRole('')
+              setMessage('')
+            }}
+          >
+            Back
+          </button>
+
           {message && (
-            <p style={styles.message}>
+            <div style={styles.message}>
               {message}
-            </p>
+            </div>
           )}
-
-          <button
-            style={styles.linkButton}
-            onClick={() => {
-              setMode(
-                mode === 'login'
-                  ? 'signup'
-                  : 'login'
-              )
-              setMessage('')
-            }}
-          >
-            {mode === 'login'
-              ? 'Create a new account'
-              : 'Already have an account? Login'}
-          </button>
-
-          <button
-            style={styles.backButton}
-            onClick={() => {
-              setRole(null)
-              setMode('login')
-              setMessage('')
-            }}
-          >
-            ← Back
-          </button>
         </div>
       </div>
     )
@@ -276,193 +410,110 @@ function App() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={styles.logo}>📍</div>
-
         <h1 style={styles.title}>FamilyTrack</h1>
 
         <p style={styles.subtitle}>
-          Family safety made simple
+          Welcome {user.email}
         </p>
 
-        <h2 style={styles.question}>
-          Choose your account
-        </h2>
+        {role === 'parent' ? (
+          <>
+            <h2>Parent Dashboard</h2>
 
-        <button
-          style={styles.button}
-          onClick={() => setRole('parent')}
-        >
-          👨‍👩‍👧 Parent
-        </button>
+            {!familyCode ? (
+              <>
+                <p>
+                  Create a family and give the Family Code
+                  to your children.
+                </p>
 
-        <button
-          style={styles.button}
-          onClick={() => setRole('child')}
-        >
-          👦 Child
-        </button>
+                <button
+                  style={styles.button}
+                  onClick={handleCreateFamily}
+                  disabled={loading}
+                >
+                  {loading ? 'Creating...' : 'Create Family'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p>Your Family Code:</p>
+
+                <div style={styles.code}>
+                  {familyCode}
+                </div>
+
+                <p>
+                  Give this code to your child so they can
+                  join your family.
+                </p>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <h2>Child Dashboard</h2>
+
+            {!familyCode ? (
+              <>
+                <p>
+                  Enter the Family Code given to you by your
+                  parent.
+                </p>
+
+                <input
+                  style={styles.input}
+                  type="text"
+                  maxLength="6"
+                  placeholder="Family Code"
+                  value={joinCode}
+                  onChange={(e) =>
+                    setJoinCode(e.target.value.toUpperCase())
+                  }
+                />
+
+                <button
+                  style={styles.button}
+                  onClick={handleJoinFamily}
+                  disabled={loading}
+                >
+                  {loading ? 'Joining...' : 'Join Family'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p>You are connected to family:</p>
+
+                <div style={styles.code}>
+                  {familyCode}
+                </div>
+
+                <p>
+                  Your account is now registered as a child
+                  in this family.
+                </p>
+              </>
+            )}
+          </>
+        )}
+
+        {message && (
+          <div style={styles.message}>
+            {message}
+          </div>
+        )}
+
+        <div style={styles.section}>
+          <button
+            style={styles.secondaryButton}
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
       </div>
     </div>
   )
-}
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    background: '#f5f7fa',
-    fontFamily: 'Arial, sans-serif',
-    padding: '20px',
-  },
-
-  card: {
-    width: '100%',
-    maxWidth: '420px',
-    background: 'white',
-    borderRadius: '20px',
-    padding: '40px 30px',
-    textAlign: 'center',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-  },
-
-  logo: {
-    fontSize: '50px',
-    marginBottom: '10px',
-  },
-
-  title: {
-    margin: '0',
-    fontSize: '32px',
-  },
-
-  subtitle: {
-    color: '#666',
-    marginBottom: '25px',
-  },
-
-  question: {
-    fontSize: '21px',
-    marginBottom: '20px',
-  },
-
-  input: {
-    width: '100%',
-    padding: '14px',
-    marginBottom: '12px',
-    border: '1px solid #ddd',
-    borderRadius: '10px',
-    fontSize: '16px',
-  },
-
-  button: {
-    width: '100%',
-    padding: '15px',
-    marginBottom: '12px',
-    border: 'none',
-    borderRadius: '12px',
-    background: '#2563eb',
-    color: 'white',
-    fontSize: '17px',
-    cursor: 'pointer',
-  },
-
-  googleButton: {
-    width: '100%',
-    padding: '15px',
-    marginBottom: '12px',
-    border: '1px solid #ddd',
-    borderRadius: '12px',
-    background: 'white',
-    color: '#333',
-    fontSize: '17px',
-    cursor: 'pointer',
-  },
-
-  message: {
-    color: '#d00',
-    fontSize: '14px',
-    lineHeight: '1.5',
-    margin: '10px 0',
-    wordBreak: 'break-word',
-  },
-
-  successMessage: {
-    color: '#16803c',
-    fontSize: '14px',
-    lineHeight: '1.5',
-    margin: '10px 0',
-  },
-
-  linkButton: {
-    width: '100%',
-    padding: '10px',
-    border: 'none',
-    background: 'transparent',
-    color: '#2563eb',
-    fontSize: '15px',
-    cursor: 'pointer',
-  },
-
-  backButton: {
-    width: '100%',
-    padding: '12px',
-    marginTop: '8px',
-    border: 'none',
-    background: 'transparent',
-    color: '#555',
-    fontSize: '16px',
-    cursor: 'pointer',
-  },
-
-  dashboardBox: {
-    background: '#f5f7fa',
-    borderRadius: '12px',
-    padding: '20px',
-    marginBottom: '20px',
-  },
-
-  dashboardTitle: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    margin: '0 0 10px',
-  },
-
-  dashboardText: {
-    fontSize: '14px',
-    color: '#555',
-    margin: '0',
-    wordBreak: 'break-word',
-  },
-
-  familyBox: {
-    background: '#eff6ff',
-    borderRadius: '15px',
-    padding: '20px',
-    marginBottom: '20px',
-  },
-
-  familyTitle: {
-    fontSize: '17px',
-    fontWeight: 'bold',
-    margin: '0 0 15px',
-  },
-
-  familyCode: {
-    fontSize: '30px',
-    fontWeight: 'bold',
-    letterSpacing: '5px',
-    color: '#2563eb',
-    marginBottom: '12px',
-  },
-
-  familyText: {
-    fontSize: '14px',
-    color: '#555',
-    margin: '0',
-    lineHeight: '1.5',
-  },
 }
 
 export default App
