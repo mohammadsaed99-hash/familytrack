@@ -5,7 +5,12 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth'
-import { auth } from './firebase'
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { auth, db } from './firebase'
 
 function generateFamilyCode() {
   const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -68,10 +73,30 @@ function App() {
     }
   }
 
-  const handleCreateFamily = () => {
-    const code = generateFamilyCode()
-    setFamilyCode(code)
-    setMessage('Family created successfully!')
+  const handleCreateFamily = async () => {
+    setMessage('')
+
+    try {
+      if (!user) {
+        setMessage('Please login first.')
+        return
+      }
+
+      const code = generateFamilyCode()
+
+      await setDoc(doc(db, 'families', code), {
+        familyCode: code,
+        parentId: user.uid,
+        parentEmail: user.email,
+        createdAt: serverTimestamp(),
+        children: [],
+      })
+
+      setFamilyCode(code)
+      setMessage('Family created successfully!')
+    } catch (error) {
+      setMessage(error.message)
+    }
   }
 
   const handleLogout = () => {
@@ -137,7 +162,13 @@ function App() {
           )}
 
           {message && (
-            <p style={styles.successMessage}>
+            <p
+              style={
+                message.includes('successfully')
+                  ? styles.successMessage
+                  : styles.message
+              }
+            >
               {message}
             </p>
           )}
@@ -360,6 +391,7 @@ const styles = {
   successMessage: {
     color: '#16803c',
     fontSize: '14px',
+    lineHeight: '1.5',
     margin: '10px 0',
   },
 
