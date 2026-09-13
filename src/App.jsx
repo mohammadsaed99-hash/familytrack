@@ -40,14 +40,12 @@ function App() {
 
   const [familyCode, setFamilyCode] = useState('')
   const [joinCode, setJoinCode] = useState('')
-
   const [children, setChildren] = useState([])
 
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingFamily, setLoadingFamily] = useState(false)
 
-  // Watch login state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
@@ -56,7 +54,7 @@ function App() {
     return unsubscribe
   }, [])
 
-  // Automatically find the user's existing family
+  // Find existing family
   useEffect(() => {
     if (!user || !role) return
 
@@ -65,11 +63,10 @@ function App() {
         setLoadingFamily(true)
         setMessage('')
 
-        // Parent: search families for parentId == current user
-        if (role === 'parent') {
-          const familiesRef = collection(db, 'families')
-          const snapshot = await getDocs(familiesRef)
+        const familiesRef = collection(db, 'families')
+        const snapshot = await getDocs(familiesRef)
 
+        if (role === 'parent') {
           const family = snapshot.docs.find(
             (familyDoc) =>
               familyDoc.data().parentId === user.uid
@@ -80,12 +77,8 @@ function App() {
           }
         }
 
-        // Child: search family member documents
         if (role === 'child') {
-          const familiesRef = collection(db, 'families')
-          const familiesSnapshot = await getDocs(familiesRef)
-
-          for (const familyDoc of familiesSnapshot.docs) {
+          for (const familyDoc of snapshot.docs) {
             const memberRef = doc(
               db,
               'families',
@@ -112,7 +105,7 @@ function App() {
     findFamily()
   }, [user, role])
 
-  // Load children for parent
+  // Load children
   useEffect(() => {
     if (!user || role !== 'parent' || !familyCode) {
       setChildren([])
@@ -154,9 +147,7 @@ function App() {
 
     try {
       setLoading(true)
-
       await signInWithEmailAndPassword(auth, email, password)
-
       setMessage('Login successful!')
     } catch (error) {
       setMessage(error.message)
@@ -180,9 +171,7 @@ function App() {
 
     try {
       setLoading(true)
-
       await createUserWithEmailAndPassword(auth, email, password)
-
       setMessage('Account created successfully!')
     } catch (error) {
       setMessage(error.message)
@@ -288,6 +277,78 @@ function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Share child's current location
+  const handleShareLocation = () => {
+    setMessage('')
+
+    if (!user) {
+      setMessage('Please login first.')
+      return
+    }
+
+    if (!familyCode) {
+      setMessage('You are not connected to a family.')
+      return
+    }
+
+    if (!navigator.geolocation) {
+      setMessage('Location is not supported by this browser.')
+      return
+    }
+
+    setLoading(true)
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords
+
+          await setDoc(
+            doc(
+              db,
+              'families',
+              familyCode,
+              'members',
+              user.uid
+            ),
+            {
+              userId: user.uid,
+              email: user.email,
+              role: 'child',
+              latitude,
+              longitude,
+              accuracy,
+              locationUpdatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          )
+
+          setMessage('Location shared successfully!')
+        } catch (error) {
+          setMessage(error.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+      (error) => {
+        setLoading(false)
+
+        if (error.code === 1) {
+          setMessage('Location permission was denied.')
+        } else if (error.code === 2) {
+          setMessage('Location is unavailable.')
+        } else {
+          setMessage('Unable to get your location.')
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    )
   }
 
   const handleLogout = async () => {
@@ -541,9 +602,7 @@ function App() {
 
             {!familyCode ? (
               <>
-                <p>
-                  You don't have a family yet.
-                </p>
+                <p>You don't have a family yet.</p>
 
                 <button
                   style={styles.button}
@@ -570,9 +629,7 @@ function App() {
                   <h2>Children</h2>
 
                   {children.length === 0 ? (
-                    <p>
-                      No children have joined yet.
-                    </p>
+                    <p>No children have joined yet.</p>
                   ) : (
                     children.map((child) => (
                       <div
@@ -584,6 +641,16 @@ function App() {
                         <div style={{ marginTop: '6px' }}>
                           {child.email}
                         </div>
+
+                        {child.latitude && child.longitude ? (
+                          <div style={{ marginTop: '8px' }}>
+                            📍 Location shared
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: '8px' }}>
+                            📍 No location yet
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -631,9 +698,19 @@ function App() {
                   {familyCode}
                 </div>
 
+                <button
+                  style={styles.button}
+                  onClick={handleShareLocation}
+                  disabled={loading}
+                >
+                  {loading
+                    ? 'Getting location...'
+                    : '📍 Share My Location'}
+                </button>
+
                 <p>
-                  Your account is registered as a child
-                  in this family.
+                  Press the button to share your current
+                  location with your family.
                 </p>
               </>
             )}
