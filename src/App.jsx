@@ -961,8 +961,7 @@ export default function App() {
           body: JSON.stringify({
             token,
             title: 'FamilyTrack Alert',
-            body: `${name} has left the Safe Zone.`,
-          }),
+body: `${name} has left the Safe Zone.`,          }),
         }
       )
 
