@@ -13,12 +13,9 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
-  query,
   setDoc,
   updateDoc,
-  where,
   serverTimestamp,
 } from 'firebase/firestore'
 
@@ -48,7 +45,7 @@ const VAPID_KEY =
 const SAFE_ZONE_RADIUS = 100
 
 const NOTIFICATION_WORKER_URL =
-  'https://familytrack-notifications.mohammadsaed99.workers.dev'
+  'https://familytrack-notifications.mohammad-saed99.workers.dev'
 
 const defaultCenter = [31.9539, 35.9106]
 
@@ -610,21 +607,19 @@ export default function App() {
       const code =
         joinCode.trim().toUpperCase()
 
-      const codeRef = doc(
-        db,
-        'familyCodes',
-        code
-      )
-
-      const codeSnapshot =
-        await getDoc(codeRef)
-
-      if (!codeSnapshot.exists()) {
+      if (code.length !== 6) {
         setError(
-          'Family code not found.'
+          'Please enter a valid 6-character Family Code.'
         )
         return
       }
+
+      /*
+       * IMPORTANT:
+       * We intentionally do NOT read familyCodes here.
+       * The child joins by creating their own member
+       * document first.
+       */
 
       const memberRef = doc(
         db,
@@ -652,7 +647,7 @@ export default function App() {
 
       if (!familySnapshot.exists()) {
         setError(
-          'Family not found.'
+          'Family code not found.'
         )
         return
       }
@@ -686,6 +681,11 @@ export default function App() {
         'You joined the family successfully.'
       )
     } catch (err) {
+      console.error(
+        'Join family error:',
+        err
+      )
+
       setError(err.message)
     }
   }
@@ -722,8 +722,7 @@ export default function App() {
           const now = Date.now()
 
           if (
-            now - lastSent <
-            30000
+            now - lastSent < 30000
           ) {
             return
           }
