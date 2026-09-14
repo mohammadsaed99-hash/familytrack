@@ -754,8 +754,9 @@ export default function App() {
 
     setTracking(false)
 
-    setMessage(
-      '{user ? 'Live location stopped.' : ''}'
+      setMessage(
+  user ? 'Live location stopped.' : ''
+)
     )
   }
 
