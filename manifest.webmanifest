@@ -1,0 +1,12 @@
+{
+  "name": "FamilyTrack",
+  "short_name": "FamilyTrack",
+  "description": "Family safety and location tracking",
+  "start_url": "/familytrack/",
+  "scope": "/familytrack/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": []
+}
