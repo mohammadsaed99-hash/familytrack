@@ -757,7 +757,6 @@ export default function App() {
       setMessage(
   user ? 'Live location stopped.' : ''
 )
-    )
   }
 
   async function setSafeZoneAtLocation(
