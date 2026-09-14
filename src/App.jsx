@@ -182,12 +182,18 @@ export default function App() {
   const watchIdRef = useRef(null)
   const previousChildStatusRef = useRef({})
 
+  /*
+   * AUTHENTICATION
+   *
+   * Important:
+   * We keep loading=true until the user's
+   * family information has been restored.
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
       async (currentUser) => {
         setUser(currentUser)
-        setLoading(false)
 
         if (!currentUser) {
           setRole(null)
@@ -195,16 +201,26 @@ export default function App() {
           setFamilyData(null)
           setChildren([])
           setSelectedChild(null)
+          setLocation(null)
+          setSafeZone(null)
+          setLoading(false)
           return
         }
 
+        setLoading(true)
+
         await findUserFamily(currentUser)
+
+        setLoading(false)
       }
     )
 
     return () => unsubscribe()
   }, [])
 
+  /*
+   * Restore family information after login
+   */
   async function findUserFamily(currentUser) {
     try {
       const userRef = doc(
@@ -223,7 +239,13 @@ export default function App() {
         return
       }
 
-      const userData = userSnapshot.data()
+      const userData =
+        userSnapshot.data()
+
+      console.log(
+        'Restored user data:',
+        userData
+      )
 
       if (
         !userData.familyCode ||
@@ -264,14 +286,31 @@ export default function App() {
       })
 
       setRole(userData.role)
+
+      console.log(
+        'Family restored:',
+        userData.familyCode,
+        userData.role
+      )
     } catch (err) {
       console.error(
-        'Failed to find user family:',
+        'Failed to restore user family:',
         err
       )
+
+      setError(
+        'Could not restore your family information.'
+      )
+
+      setRole(null)
+      setFamilyCode('')
+      setFamilyData(null)
     }
   }
 
+  /*
+   * Parent family listener
+   */
   useEffect(() => {
     if (!familyCode || role !== 'parent') {
       return
@@ -298,6 +337,12 @@ export default function App() {
             data.safeZone || null
           )
         }
+      },
+      (err) => {
+        console.error(
+          'Family listener error:',
+          err
+        )
       }
     )
 
@@ -318,6 +363,12 @@ export default function App() {
           }))
 
         setChildren(list)
+      },
+      (err) => {
+        console.error(
+          'Members listener error:',
+          err
+        )
       }
     )
 
@@ -327,6 +378,9 @@ export default function App() {
     }
   }, [familyCode, role])
 
+  /*
+   * Child member listener
+   */
   useEffect(() => {
     if (
       !familyCode ||
@@ -374,12 +428,21 @@ export default function App() {
               : null
           )
         }
+      },
+      (err) => {
+        console.error(
+          'Child listener error:',
+          err
+        )
       }
     )
 
     return () => unsubscribe()
   }, [familyCode, role, user])
 
+  /*
+   * Parent Safe Zone notification listener
+   */
   useEffect(() => {
     if (!familyCode || role !== 'parent') {
       return
@@ -419,12 +482,21 @@ export default function App() {
             child.safeZoneStatus ||
             'unknown'
         })
+      },
+      (err) => {
+        console.error(
+          'Notification listener error:',
+          err
+        )
       }
     )
 
     return () => unsubscribe()
   }, [familyCode, role])
 
+  /*
+   * Register push notifications
+   */
   useEffect(() => {
     if (
       role === 'parent' &&
@@ -440,6 +512,9 @@ export default function App() {
     user,
   ])
 
+  /*
+   * Cleanup location watcher
+   */
   useEffect(() => {
     return () => {
       if (
@@ -452,6 +527,9 @@ export default function App() {
     }
   }, [])
 
+  /*
+   * Create account
+   */
   async function register() {
     setError('')
     setMessage('')
@@ -481,6 +559,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Login
+   */
   async function login() {
     setError('')
     setMessage('')
@@ -510,6 +591,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Google login
+   */
   async function loginWithGoogle() {
     setError('')
     setMessage('')
@@ -534,6 +618,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Create family
+   */
   async function createFamily() {
     if (!user) {
       return
@@ -595,6 +682,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Join family
+   */
   async function joinFamily() {
     if (!user || !joinCode) {
       return
@@ -615,10 +705,9 @@ export default function App() {
       }
 
       /*
-       * IMPORTANT:
-       * We intentionally do NOT read familyCodes here.
-       * The child joins by creating their own member
-       * document first.
+       * We intentionally do not read familyCodes here.
+       * The Firestore security rules verify that the
+       * family itself exists.
        */
 
       const memberRef = doc(
@@ -690,6 +779,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Start live location
+   */
   function startLocationTracking() {
     if (!navigator.geolocation) {
       setError(
@@ -828,6 +920,9 @@ export default function App() {
     setTracking(true)
   }
 
+  /*
+   * Stop live location
+   */
   function stopLocationTracking() {
     if (
       watchIdRef.current !== null
@@ -848,6 +943,9 @@ export default function App() {
     )
   }
 
+  /*
+   * Set Safe Zone
+   */
   async function setSafeZoneAtLocation(
     position
   ) {
@@ -899,6 +997,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Request browser notification permission
+   */
   async function requestNotificationPermission() {
     if (
       typeof Notification ===
@@ -936,6 +1037,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Register FCM push notifications
+   */
   async function registerForPushNotifications() {
     try {
       if (
@@ -1038,6 +1142,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Send parent notification
+   */
   async function sendParentNotification(
     child
   ) {
@@ -1102,6 +1209,9 @@ export default function App() {
     }
   }
 
+  /*
+   * Logout
+   */
   async function logout() {
     stopLocationTracking()
 
@@ -1116,8 +1226,13 @@ export default function App() {
     setSafeZone(null)
     setSelectedChild(null)
     setFcmReady(false)
+    setMessage('')
+    setError('')
   }
 
+  /*
+   * Loading screen
+   */
   if (loading) {
     return (
       <div style={styles.centerScreen}>
@@ -1127,6 +1242,9 @@ export default function App() {
     )
   }
 
+  /*
+   * Login screen
+   */
   if (!user) {
     return (
       <div style={styles.page}>
@@ -1200,6 +1318,9 @@ export default function App() {
     )
   }
 
+  /*
+   * Role selection
+   */
   if (!role) {
     return (
       <div style={styles.page}>
@@ -1274,6 +1395,9 @@ export default function App() {
     )
   }
 
+  /*
+   * CHILD DASHBOARD
+   */
   if (role === 'child') {
     return (
       <div style={styles.page}>
@@ -1419,6 +1543,9 @@ export default function App() {
     )
   }
 
+  /*
+   * PARENT DASHBOARD
+   */
   return (
     <div style={styles.page}>
       <div style={styles.dashboard}>
