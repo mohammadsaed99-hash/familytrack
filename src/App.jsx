@@ -1,3 +1,4 @@
+```jsx
 import { useEffect, useRef, useState } from 'react'
 
 import {
@@ -11,6 +12,7 @@ import {
 
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -62,11 +64,19 @@ const childIcon = new L.Icon({
   shadowSize: [41, 41],
 })
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
+function calculateDistance(
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) {
   const R = 6371000
 
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const dLat =
+    ((lat2 - lat1) * Math.PI) / 180
+
+  const dLon =
+    ((lon2 - lon1) * Math.PI) / 180
 
   const a =
     Math.sin(dLat / 2) ** 2 +
@@ -82,6 +92,117 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
       Math.sqrt(1 - a)
     )
   )
+}
+
+/*
+ * Convert old single safeZone format
+ * into the new multiple safeZones format.
+ */
+function getSafeZonesFromFamilyData(data) {
+  if (
+    data &&
+    Array.isArray(data.safeZones)
+  ) {
+    return data.safeZones
+  }
+
+  if (
+    data &&
+    data.safeZone &&
+    typeof data.safeZone.latitude ===
+      'number' &&
+    typeof data.safeZone.longitude ===
+      'number'
+  ) {
+    return [
+      {
+        id: 'legacy-safe-zone',
+        name: 'Safe Zone',
+        latitude: data.safeZone.latitude,
+        longitude: data.safeZone.longitude,
+        radius:
+          typeof data.safeZone.radius ===
+          'number'
+            ? data.safeZone.radius
+            : SAFE_ZONE_RADIUS,
+      },
+    ]
+  }
+
+  return []
+}
+
+function getLocationStatus(
+  latitude,
+  longitude,
+  accuracy,
+  safeZones
+) {
+  if (
+    !Array.isArray(safeZones) ||
+    safeZones.length === 0
+  ) {
+    return {
+      status: 'unknown',
+      distance: null,
+      zone: null,
+    }
+  }
+
+  if (accuracy > 50) {
+    return {
+      status: 'unknown',
+      distance: null,
+      zone: null,
+    }
+  }
+
+  let nearestDistance = null
+  let nearestZone = null
+
+  for (const zone of safeZones) {
+    if (
+      typeof zone.latitude !== 'number' ||
+      typeof zone.longitude !== 'number'
+    ) {
+      continue
+    }
+
+    const distance =
+      calculateDistance(
+        latitude,
+        longitude,
+        zone.latitude,
+        zone.longitude
+      )
+
+    if (
+      nearestDistance === null ||
+      distance < nearestDistance
+    ) {
+      nearestDistance = distance
+      nearestZone = zone
+    }
+
+    const radius =
+      typeof zone.radius === 'number'
+        ? zone.radius
+        : SAFE_ZONE_RADIUS
+
+    if (distance <= radius) {
+      return {
+        status: 'inside',
+        distance,
+        zone,
+      }
+    }
+  }
+
+  return {
+    status: 'outside',
+    distance: nearestDistance,
+    zone: nearestZone,
+  }
 }
 
 function SafeZonePicker({ onPick }) {
@@ -160,7 +281,8 @@ export default function App() {
   const [location, setLocation] = useState(null)
   const [tracking, setTracking] = useState(false)
 
-  const [safeZone, setSafeZone] = useState(null)
+  const [safeZones, setSafeZones] = useState([])
+
   const [safeZoneStatus, setSafeZoneStatus] =
     useState('unknown')
 
@@ -180,14 +302,12 @@ export default function App() {
   const [fcmReady, setFcmReady] = useState(false)
 
   const watchIdRef = useRef(null)
-  const previousChildStatusRef = useRef({})
+
+  const previousChildStatusRef =
+    useRef({})
 
   /*
    * AUTHENTICATION
-   *
-   * Important:
-   * We keep loading=true until the user's
-   * family information has been restored.
    */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
@@ -202,7 +322,7 @@ export default function App() {
           setChildren([])
           setSelectedChild(null)
           setLocation(null)
-          setSafeZone(null)
+          setSafeZones([])
           setLoading(false)
           return
         }
@@ -236,6 +356,7 @@ export default function App() {
         setRole(null)
         setFamilyCode('')
         setFamilyData(null)
+        setSafeZones([])
         return
       }
 
@@ -254,6 +375,7 @@ export default function App() {
         setRole(null)
         setFamilyCode('')
         setFamilyData(null)
+        setSafeZones([])
         return
       }
 
@@ -270,11 +392,17 @@ export default function App() {
         setRole(null)
         setFamilyCode('')
         setFamilyData(null)
+        setSafeZones([])
         return
       }
 
       const familyDataValue =
         familySnapshot.data()
+
+      const restoredSafeZones =
+        getSafeZonesFromFamilyData(
+          familyDataValue
+        )
 
       setFamilyCode(
         userData.familyCode
@@ -284,6 +412,10 @@ export default function App() {
         id: familySnapshot.id,
         ...familyDataValue,
       })
+
+      setSafeZones(
+        restoredSafeZones
+      )
 
       setRole(userData.role)
 
@@ -305,6 +437,7 @@ export default function App() {
       setRole(null)
       setFamilyCode('')
       setFamilyData(null)
+      setSafeZones([])
     }
   }
 
@@ -312,7 +445,10 @@ export default function App() {
    * Parent family listener
    */
   useEffect(() => {
-    if (!familyCode || role !== 'parent') {
+    if (
+      !familyCode ||
+      role !== 'parent'
+    ) {
       return
     }
 
@@ -322,29 +458,34 @@ export default function App() {
       familyCode
     )
 
-    const unsubscribeFamily = onSnapshot(
-      familyRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data()
+    const unsubscribeFamily =
+      onSnapshot(
+        familyRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data =
+              snapshot.data()
 
-          setFamilyData({
-            id: snapshot.id,
-            ...data,
-          })
+            const zones =
+              getSafeZonesFromFamilyData(
+                data
+              )
 
-          setSafeZone(
-            data.safeZone || null
+            setFamilyData({
+              id: snapshot.id,
+              ...data,
+            })
+
+            setSafeZones(zones)
+          }
+        },
+        (err) => {
+          console.error(
+            'Family listener error:',
+            err
           )
         }
-      },
-      (err) => {
-        console.error(
-          'Family listener error:',
-          err
-        )
-      }
-    )
+      )
 
     const membersRef = collection(
       db,
@@ -353,24 +494,27 @@ export default function App() {
       'members'
     )
 
-    const unsubscribeMembers = onSnapshot(
-      membersRef,
-      (snapshot) => {
-        const list =
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
+    const unsubscribeMembers =
+      onSnapshot(
+        membersRef,
+        (snapshot) => {
+          const list =
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            )
 
-        setChildren(list)
-      },
-      (err) => {
-        console.error(
-          'Members listener error:',
-          err
-        )
-      }
-    )
+          setChildren(list)
+        },
+        (err) => {
+          console.error(
+            'Members listener error:',
+            err
+          )
+        }
+      )
 
     return () => {
       unsubscribeFamily()
@@ -398,101 +542,127 @@ export default function App() {
       user.uid
     )
 
-    const unsubscribe = onSnapshot(
-      memberRef,
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          return
-        }
+    const unsubscribe =
+      onSnapshot(
+        memberRef,
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            return
+          }
 
-        const data = snapshot.data()
+          const data =
+            snapshot.data()
 
-        if (
-          typeof data.latitude === 'number' &&
-          typeof data.longitude === 'number'
-        ) {
-          setLocation({
-            latitude: data.latitude,
-            longitude: data.longitude,
-            accuracy: data.accuracy,
-          })
-
-          setSafeZoneStatus(
-            data.safeZoneStatus || 'unknown'
-          )
-
-          setDistanceFromSafeZone(
-            typeof data.distanceFromSafeZone ===
+          if (
+            typeof data.latitude ===
+              'number' &&
+            typeof data.longitude ===
               'number'
-              ? data.distanceFromSafeZone
-              : null
+          ) {
+            setLocation({
+              latitude:
+                data.latitude,
+              longitude:
+                data.longitude,
+              accuracy:
+                data.accuracy,
+            })
+
+            setSafeZoneStatus(
+              data.safeZoneStatus ||
+                'unknown'
+            )
+
+            setDistanceFromSafeZone(
+              typeof data.distanceFromSafeZone ===
+                'number'
+                ? data.distanceFromSafeZone
+                : null
+            )
+          }
+        },
+        (err) => {
+          console.error(
+            'Child listener error:',
+            err
           )
         }
-      },
-      (err) => {
-        console.error(
-          'Child listener error:',
-          err
-        )
-      }
-    )
+      )
 
     return () => unsubscribe()
-  }, [familyCode, role, user])
+  }, [
+    familyCode,
+    role,
+    user,
+  ])
 
   /*
    * Parent Safe Zone notification listener
    */
   useEffect(() => {
-    if (!familyCode || role !== 'parent') {
+    if (
+      !familyCode ||
+      role !== 'parent'
+    ) {
       return
     }
 
-    const unsubscribe = onSnapshot(
-      collection(
-        db,
-        'families',
-        familyCode,
-        'members'
-      ),
-      (snapshot) => {
-        snapshot.docs.forEach((item) => {
-          const child = {
-            id: item.id,
-            ...item.data(),
-          }
+    const unsubscribe =
+      onSnapshot(
+        collection(
+          db,
+          'families',
+          familyCode,
+          'members'
+        ),
+        (snapshot) => {
+          snapshot.docs.forEach(
+            (item) => {
+              const child = {
+                id: item.id,
+                ...item.data(),
+              }
 
-          const previousStatus =
-            previousChildStatusRef.current[
-              child.id
-            ]
+              const previousStatus =
+                previousChildStatusRef
+                  .current[
+                  child.id
+                ]
 
-          if (
-            child.safeZoneStatus ===
-              'outside' &&
-            previousStatus &&
-            previousStatus !== 'outside'
-          ) {
-            sendParentNotification(child)
-          }
+              if (
+                child.safeZoneStatus ===
+                  'outside' &&
+                previousStatus &&
+                previousStatus !==
+                  'outside'
+              ) {
+                sendParentNotification(
+                  child
+                )
+              }
 
-          previousChildStatusRef.current[
-            child.id
-          ] =
-            child.safeZoneStatus ||
-            'unknown'
-        })
-      },
-      (err) => {
-        console.error(
-          'Notification listener error:',
-          err
-        )
-      }
-    )
+              previousChildStatusRef
+                .current[
+                child.id
+              ] =
+                child.safeZoneStatus ||
+                'unknown'
+            }
+          )
+        },
+        (err) => {
+          console.error(
+            'Notification listener error:',
+            err
+          )
+        }
+      )
 
     return () => unsubscribe()
-  }, [familyCode, role])
+  }, [
+    familyCode,
+    role,
+  ])
 
   /*
    * Register push notifications
@@ -639,26 +809,40 @@ export default function App() {
         doc(db, 'families', code),
         {
           parentId: user.uid,
-          parentEmail: user.email || '',
-          createdAt: serverTimestamp(),
+          parentEmail:
+            user.email || '',
+          safeZones: [],
+          createdAt:
+            serverTimestamp(),
         }
       )
 
       await setDoc(
-        doc(db, 'familyCodes', code),
+        doc(
+          db,
+          'familyCodes',
+          code
+        ),
         {
           familyCode: code,
-          createdAt: serverTimestamp(),
+          createdAt:
+            serverTimestamp(),
         }
       )
 
       await setDoc(
-        doc(db, 'users', user.uid),
+        doc(
+          db,
+          'users',
+          user.uid
+        ),
         {
           familyCode: code,
           role: 'parent',
-          email: user.email || '',
-          updatedAt: serverTimestamp(),
+          email:
+            user.email || '',
+          updatedAt:
+            serverTimestamp(),
         },
         {
           merge: true,
@@ -666,12 +850,17 @@ export default function App() {
       )
 
       setFamilyCode(code)
+
       setRole('parent')
+
+      setSafeZones([])
 
       setFamilyData({
         id: code,
         parentId: user.uid,
-        parentEmail: user.email || '',
+        parentEmail:
+          user.email || '',
+        safeZones: [],
       })
 
       setMessage(
@@ -704,27 +893,6 @@ export default function App() {
         return
       }
 
-      /*
-       * We intentionally do not read familyCodes here.
-       * The Firestore security rules verify that the
-       * family itself exists.
-       */
-
-      const memberRef = doc(
-        db,
-        'families',
-        code,
-        'members',
-        user.uid
-      )
-
-      await setDoc(memberRef, {
-        userId: user.uid,
-        email: user.email || '',
-        role: 'child',
-        joinedAt: serverTimestamp(),
-      })
-
       const familyRef = doc(
         db,
         'families',
@@ -744,13 +912,35 @@ export default function App() {
       const familyDataSnapshot =
         familySnapshot.data()
 
+      const memberRef = doc(
+        db,
+        'families',
+        code,
+        'members',
+        user.uid
+      )
+
+      await setDoc(memberRef, {
+        userId: user.uid,
+        email: user.email || '',
+        role: 'child',
+        joinedAt:
+          serverTimestamp(),
+      })
+
       await setDoc(
-        doc(db, 'users', user.uid),
+        doc(
+          db,
+          'users',
+          user.uid
+        ),
         {
           familyCode: code,
           role: 'child',
-          email: user.email || '',
-          updatedAt: serverTimestamp(),
+          email:
+            user.email || '',
+          updatedAt:
+            serverTimestamp(),
         },
         {
           merge: true,
@@ -763,6 +953,12 @@ export default function App() {
         id: code,
         ...familyDataSnapshot,
       })
+
+      setSafeZones(
+        getSafeZonesFromFamilyData(
+          familyDataSnapshot
+        )
+      )
 
       setRole('child')
 
@@ -802,6 +998,7 @@ export default function App() {
     }
 
     setError('')
+
     setMessage(
       'Starting live location...'
     )
@@ -814,7 +1011,8 @@ export default function App() {
           const now = Date.now()
 
           if (
-            now - lastSent < 30000
+            now - lastSent <
+            30000
           ) {
             return
           }
@@ -836,54 +1034,44 @@ export default function App() {
             accuracy,
           })
 
-          let status = 'unknown'
-          let distance = null
+          const result =
+            getLocationStatus(
+              latitude,
+              longitude,
+              accuracy,
+              safeZones
+            )
 
-          if (
-            safeZone &&
-            typeof safeZone.latitude ===
-              'number' &&
-            typeof safeZone.longitude ===
-              'number'
-          ) {
-            distance =
-              calculateDistance(
-                latitude,
-                longitude,
-                safeZone.latitude,
-                safeZone.longitude
-              )
+          const status =
+            result.status
 
-            if (accuracy > 50) {
-              status = 'unknown'
-            } else {
-              status =
-                distance <=
-                SAFE_ZONE_RADIUS
-                  ? 'inside'
-                  : 'outside'
-            }
-          }
+          const distance =
+            result.distance
 
-          setSafeZoneStatus(status)
+          setSafeZoneStatus(
+            status
+          )
+
           setDistanceFromSafeZone(
             distance
           )
 
           try {
-            const memberRef = doc(
-              db,
-              'families',
-              familyCode,
-              'members',
-              user.uid
-            )
+            const memberRef =
+              doc(
+                db,
+                'families',
+                familyCode,
+                'members',
+                user.uid
+              )
 
             await setDoc(
               memberRef,
               {
                 userId: user.uid,
-                email: user.email || '',
+                email:
+                  user.email || '',
                 role: 'child',
                 latitude,
                 longitude,
@@ -911,7 +1099,8 @@ export default function App() {
           setError(err.message)
         },
         {
-          enableHighAccuracy: true,
+          enableHighAccuracy:
+            true,
           maximumAge: 10000,
           timeout: 20000,
         }
@@ -944,9 +1133,9 @@ export default function App() {
   }
 
   /*
-   * Set Safe Zone
+   * Add Safe Zone
    */
-  async function setSafeZoneAtLocation(
+  async function addSafeZoneAtLocation(
     position
   ) {
     if (
@@ -956,17 +1145,52 @@ export default function App() {
       return
     }
 
+    const zoneName =
+      window.prompt(
+        'Enter a name for this Safe Zone:',
+        `Safe Zone ${safeZones.length + 1}`
+      )
+
+    if (
+      zoneName === null
+    ) {
+      return
+    }
+
+    const trimmedName =
+      zoneName.trim()
+
+    if (!trimmedName) {
+      setError(
+        'Please enter a name for the Safe Zone.'
+      )
+      return
+    }
+
     try {
-      const newSafeZone = {
+      const newZone = {
+        id:
+          `${Date.now()}-${Math.random()
+            .toString(36)
+            .substring(2, 8)}`,
+        name: trimmedName,
         latitude:
           position.latitude,
         longitude:
           position.longitude,
         radius:
           SAFE_ZONE_RADIUS,
-        updatedAt:
-          serverTimestamp(),
       }
+
+      const currentZones =
+        Array.isArray(safeZones)
+          ? safeZones
+          : []
+
+      const updatedZones = [
+        ...currentZones,
+        newZone,
+      ]
 
       await updateDoc(
         doc(
@@ -975,22 +1199,128 @@ export default function App() {
           familyCode
         ),
         {
-          safeZone:
-            newSafeZone,
+          safeZones:
+            updatedZones,
+          updatedAt:
+            serverTimestamp(),
         }
       )
 
-      setSafeZone({
-        latitude:
-          position.latitude,
-        longitude:
-          position.longitude,
-        radius:
-          SAFE_ZONE_RADIUS,
-      })
+      setSafeZones(
+        updatedZones
+      )
 
       setMessage(
         'Safe Zone saved successfully.'
+      )
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  /*
+   * Delete Safe Zone
+   */
+  async function deleteSafeZone(
+    zoneId
+  ) {
+    if (
+      !familyCode ||
+      role !== 'parent'
+    ) {
+      return
+    }
+
+    const zone =
+      safeZones.find(
+        (item) =>
+          item.id === zoneId
+      )
+
+    const confirmed =
+      window.confirm(
+        `Delete "${zone?.name || 'this Safe Zone'}"?`
+      )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const updatedZones =
+        safeZones.filter(
+          (item) =>
+            item.id !== zoneId
+        )
+
+      await updateDoc(
+        doc(
+          db,
+          'families',
+          familyCode
+        ),
+        {
+          safeZones:
+            updatedZones,
+          updatedAt:
+            serverTimestamp(),
+        }
+      )
+
+      setSafeZones(
+        updatedZones
+      )
+
+      setMessage(
+        'Safe Zone deleted.'
+      )
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  /*
+   * Remove child from family
+   */
+  async function removeChild(
+    child
+  ) {
+    if (
+      !familyCode ||
+      role !== 'parent'
+    ) {
+      return
+    }
+
+    const confirmed =
+      window.confirm(
+        `Remove ${child.email || 'this child'} from the family?`
+      )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          'families',
+          familyCode,
+          'members',
+          child.id
+        )
+      )
+
+      if (
+        selectedChild?.id ===
+        child.id
+      ) {
+        setSelectedChild(null)
+      }
+
+      setMessage(
+        'Child removed from the family.'
       )
     } catch (err) {
       setError(err.message)
@@ -1019,7 +1349,9 @@ export default function App() {
         permission
       )
 
-      if (permission === 'granted') {
+      if (
+        permission === 'granted'
+      ) {
         await registerForPushNotifications()
 
         setMessage(
@@ -1179,7 +1511,7 @@ export default function App() {
               token,
               title:
                 'FamilyTrack Alert',
-              body: `${name} has left the Safe Zone.`,
+              body: `${name} has left all Safe Zones.`,
             }),
           }
         )
@@ -1221,9 +1553,9 @@ export default function App() {
     setRole(null)
     setFamilyCode('')
     setFamilyData(null)
+    setSafeZones([])
     setChildren([])
     setLocation(null)
-    setSafeZone(null)
     setSelectedChild(null)
     setFcmReady(false)
     setMessage('')
@@ -1278,14 +1610,18 @@ export default function App() {
           />
 
           <button
-            style={styles.primaryButton}
+            style={
+              styles.primaryButton
+            }
             onClick={login}
           >
             Login
           </button>
 
           <button
-            style={styles.secondaryButton}
+            style={
+              styles.secondaryButton
+            }
             onClick={register}
           >
             Create Account
@@ -1303,13 +1639,21 @@ export default function App() {
           </button>
 
           {error && (
-            <div style={styles.errorBox}>
+            <div
+              style={
+                styles.errorBox
+              }
+            >
               {error}
             </div>
           )}
 
           {message && (
-            <div style={styles.successBox}>
+            <div
+              style={
+                styles.successBox
+              }
+            >
               {message}
             </div>
           )}
@@ -1325,7 +1669,9 @@ export default function App() {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <h1>🏠 FamilyTrack</h1>
+          <h1>
+            🏠 FamilyTrack
+          </h1>
 
           <p>
             Logged in as:
@@ -1380,13 +1726,21 @@ export default function App() {
           </button>
 
           {error && (
-            <div style={styles.errorBox}>
+            <div
+              style={
+                styles.errorBox
+              }
+            >
               {error}
             </div>
           )}
 
           {message && (
-            <div style={styles.successBox}>
+            <div
+              style={
+                styles.successBox
+              }
+            >
               {message}
             </div>
           )}
@@ -1459,8 +1813,33 @@ export default function App() {
 
           <div style={styles.infoCard}>
             <strong>
-              Safe Zone
+              Safe Zones
             </strong>
+
+            {safeZones.length === 0 ? (
+              <p>
+                No Safe Zones have been configured.
+              </p>
+            ) : (
+              <ul>
+                {safeZones.map(
+                  (zone) => (
+                    <li
+                      key={
+                        zone.id
+                      }
+                    >
+                      {zone.name ||
+                        'Safe Zone'}{' '}
+                      —{' '}
+                      {zone.radius ||
+                        SAFE_ZONE_RADIUS}
+                      m
+                    </li>
+                  )
+                )}
+              </ul>
+            )}
 
             {safeZoneStatus ===
               'inside' && (
@@ -1469,7 +1848,7 @@ export default function App() {
                   styles.insideText
                 }
               >
-                🟢 You are inside the Safe Zone.
+                🟢 You are inside a Safe Zone.
               </p>
             )}
 
@@ -1480,14 +1859,22 @@ export default function App() {
                   styles.outsideText
                 }
               >
-                🔴 You are outside the Safe Zone.
+                🔴 You are outside all Safe Zones.
               </p>
             )}
+
+            {safeZoneStatus ===
+              'unknown' &&
+              safeZones.length > 0 && (
+                <p>
+                  ⚪ Location status unknown.
+                </p>
+              )}
 
             {distanceFromSafeZone !==
               null && (
               <p>
-                Distance from Safe Zone:{' '}
+                Distance from nearest Safe Zone:{' '}
                 {Math.round(
                   distanceFromSafeZone
                 )}{' '}
@@ -1528,13 +1915,21 @@ export default function App() {
           )}
 
           {message && (
-            <div style={styles.successBox}>
+            <div
+              style={
+                styles.successBox
+              }
+            >
               {message}
             </div>
           )}
 
           {error && (
-            <div style={styles.errorBox}>
+            <div
+              style={
+                styles.errorBox
+              }
+            >
               {error}
             </div>
           )}
@@ -1584,6 +1979,16 @@ export default function App() {
               Locations shared
             </span>
           </div>
+
+          <div style={styles.statCard}>
+            <strong>
+              {safeZones.length}
+            </strong>
+
+            <span>
+              Safe Zones
+            </span>
+          </div>
         </div>
 
         <div style={styles.infoCard}>
@@ -1592,7 +1997,9 @@ export default function App() {
           </h3>
 
           <div
-            style={styles.familyCode}
+            style={
+              styles.familyCode
+            }
           >
             {familyCode}
           </div>
@@ -1670,169 +2077,215 @@ export default function App() {
 
         <div style={styles.infoCard}>
           <h3>
-            🟢 Safe Zone
+            🟢 Safe Zones
           </h3>
 
-          {safeZone ? (
-            <>
-              <p>
-                Safe Zone is active.
-              </p>
+          <p>
+            Click anywhere on the map to add a new
+            Safe Zone.
+          </p>
 
-              <p>
-                Radius:{' '}
-                {SAFE_ZONE_RADIUS} meters
-              </p>
+          <MapContainer
+            center={defaultCenter}
+            zoom={12}
+            scrollWheelZoom={true}
+            style={styles.map}
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
-              <MapContainer
-                center={[
-                  safeZone.latitude,
-                  safeZone.longitude,
-                ]}
-                zoom={16}
-                scrollWheelZoom={true}
-                style={styles.map}
-              >
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
+            <SafeZonePicker
+              onPick={
+                addSafeZoneAtLocation
+              }
+            />
 
+            <MapFocus
+              child={selectedChild}
+            />
+
+            {safeZones.map(
+              (zone) => (
                 <Circle
+                  key={zone.id}
                   center={[
-                    safeZone.latitude,
-                    safeZone.longitude,
+                    zone.latitude,
+                    zone.longitude,
                   ]}
                   radius={
+                    zone.radius ||
                     SAFE_ZONE_RADIUS
                   }
-                />
+                >
+                  <Popup>
+                    <div>
+                      <strong>
+                        {zone.name ||
+                          'Safe Zone'}
+                      </strong>
 
-                <SafeZonePicker
-                  onPick={
-                    setSafeZoneAtLocation
-                  }
-                />
+                      <br />
 
-                <MapFocus
-                  child={selectedChild}
-                />
+                      Radius:{' '}
+                      {zone.radius ||
+                        SAFE_ZONE_RADIUS}{' '}
+                      meters
 
-                {children.map(
-                  (child) =>
-                    typeof child.latitude ===
-                      'number' &&
-                    typeof child.longitude ===
-                      'number' && (
-                      <Marker
-                        key={child.id}
-                        position={[
-                          child.latitude,
-                          child.longitude,
-                        ]}
-                        icon={childIcon}
+                      <br />
+
+                      <button
+                        style={
+                          styles.mapDangerButton
+                        }
+                        onClick={() =>
+                          deleteSafeZone(
+                            zone.id
+                          )
+                        }
                       >
-                        <Popup>
-                          <div>
-                            <strong>
-                              {child.email ||
-                                'Child'}
-                            </strong>
+                        Delete Safe Zone
+                      </button>
+                    </div>
+                  </Popup>
+                </Circle>
+              )
+            )}
 
-                            <br />
+            {children.map(
+              (child) =>
+                typeof child.latitude ===
+                  'number' &&
+                typeof child.longitude ===
+                  'number' && (
+                  <Marker
+                    key={child.id}
+                    position={[
+                      child.latitude,
+                      child.longitude,
+                    ]}
+                    icon={childIcon}
+                  >
+                    <Popup>
+                      <div>
+                        <strong>
+                          {child.email ||
+                            'Child'}
+                        </strong>
 
-                            {child.safeZoneStatus ===
-                            'outside'
-                              ? '🔴 Outside Safe Zone'
-                              : child.safeZoneStatus ===
-                                'inside'
-                              ? '🟢 Inside Safe Zone'
-                              : '⚪ Location status unknown'}
+                        <br />
 
-                            <br />
+                        {child.safeZoneStatus ===
+                        'outside'
+                          ? '🔴 Outside all Safe Zones'
+                          : child.safeZoneStatus ===
+                            'inside'
+                          ? '🟢 Inside a Safe Zone'
+                          : '⚪ Location status unknown'}
 
-                            Accuracy:{' '}
-                            {Math.round(
-                              child.accuracy ||
-                                0
-                            )}{' '}
-                            meters
+                        <br />
 
-                            <br />
+                        Accuracy:{' '}
+                        {Math.round(
+                          child.accuracy ||
+                            0
+                        )}{' '}
+                        meters
 
-                            Distance:{' '}
-                            {typeof child.distanceFromSafeZone ===
-                            'number'
-                              ? `${Math.round(
-                                  child.distanceFromSafeZone
-                                )} meters`
-                              : 'Unknown'}
+                        <br />
 
-                            <br />
+                        Distance from nearest
+                        Safe Zone:{' '}
+                        {typeof child.distanceFromSafeZone ===
+                        'number'
+                          ? `${Math.round(
+                              child.distanceFromSafeZone
+                            )} meters`
+                          : 'Unknown'}
 
-                            Last update:{' '}
-                            {formatLastUpdate(
-                              child.locationUpdatedAt
-                            )}
+                        <br />
 
-                            <br />
+                        Last update:{' '}
+                        {formatLastUpdate(
+                          child.locationUpdatedAt
+                        )}
 
-                            <button
-                              style={
-                                styles.mapButton
-                              }
-                              onClick={() =>
-                                setSelectedChild(
-                                  child
-                                )
-                              }
-                            >
-                              📍 Show on Map
-                            </button>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    )
-                )}
-              </MapContainer>
+                        <br />
 
-              <p
-                style={styles.mapHint}
-              >
-                Click anywhere on the map to move the
-                Safe Zone.
-              </p>
-            </>
-          ) : (
-            <>
+                        <button
+                          style={
+                            styles.mapButton
+                          }
+                          onClick={() =>
+                            setSelectedChild(
+                              child
+                            )
+                          }
+                        >
+                          📍 Show on Map
+                        </button>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )
+            )}
+          </MapContainer>
+
+          <div
+            style={
+              styles.safeZoneList
+            }
+          >
+            <h4>
+              Saved Safe Zones
+            </h4>
+
+            {safeZones.length === 0 ? (
               <p>
-                Safe Zone is not configured.
+                No Safe Zones yet.
               </p>
+            ) : (
+              safeZones.map(
+                (zone, index) => (
+                  <div
+                    key={zone.id}
+                    style={
+                      styles.zoneCard
+                    }
+                  >
+                    <div>
+                      <strong>
+                        {index + 1}.{' '}
+                        {zone.name ||
+                          'Safe Zone'}
+                      </strong>
 
-              <p>
-                Click on the map below to create a
-                100-meter Safe Zone.
-              </p>
+                      <div>
+                        Radius:{' '}
+                        {zone.radius ||
+                          SAFE_ZONE_RADIUS}{' '}
+                        meters
+                      </div>
+                    </div>
 
-              <MapContainer
-                center={defaultCenter}
-                zoom={12}
-                scrollWheelZoom={true}
-                style={styles.map}
-              >
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                <SafeZonePicker
-                  onPick={
-                    setSafeZoneAtLocation
-                  }
-                />
-              </MapContainer>
-            </>
-          )}
+                    <button
+                      style={
+                        styles.smallDangerButton
+                      }
+                      onClick={() =>
+                        deleteSafeZone(
+                          zone.id
+                        )
+                      }
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )
+              )
+            )}
+          </div>
         </div>
 
         <div style={styles.infoCard}>
@@ -1845,99 +2298,122 @@ export default function App() {
               No children have joined yet.
             </p>
           ) : (
-            children.map((child) => (
-              <div
-                key={child.id}
-                style={
-                  styles.childCard
-                }
-              >
-                <strong>
-                  {child.email ||
-                    'Child'}
-                </strong>
+            children.map(
+              (child) => (
+                <div
+                  key={child.id}
+                  style={
+                    styles.childCard
+                  }
+                >
+                  <strong>
+                    {child.email ||
+                      'Child'}
+                  </strong>
 
-                <p>
-                  {typeof child.latitude ===
-                  'number'
-                    ? '📍 Location available'
-                    : '⚪ No location yet'}
-                </p>
-
-                {child.safeZoneStatus ===
-                  'outside' && (
-                  <p
-                    style={
-                      styles.outsideText
-                    }
-                  >
-                    🔴 Child is outside the Safe Zone
-                  </p>
-                )}
-
-                {child.safeZoneStatus ===
-                  'inside' && (
-                  <p
-                    style={
-                      styles.insideText
-                    }
-                  >
-                    🟢 Child is inside the Safe Zone
-                  </p>
-                )}
-
-                {child.safeZoneStatus ===
-                  'unknown' && (
                   <p>
-                    ⚪ Location status unknown
+                    {typeof child.latitude ===
+                    'number'
+                      ? '📍 Location available'
+                      : '⚪ No location yet'}
                   </p>
-                )}
 
-                {typeof child.distanceFromSafeZone ===
-                  'number' && (
-                  <p>
-                    Distance:{' '}
-                    {Math.round(
-                      child.distanceFromSafeZone
-                    )}{' '}
-                    meters
-                  </p>
-                )}
+                  {child.safeZoneStatus ===
+                    'outside' && (
+                    <p
+                      style={
+                        styles.outsideText
+                      }
+                    >
+                      🔴 Child is outside all Safe Zones
+                    </p>
+                  )}
 
-                {child.locationUpdatedAt && (
-                  <p>
-                    Last update:{' '}
-                    {formatLastUpdate(
-                      child.locationUpdatedAt
-                    )}
-                  </p>
-                )}
+                  {child.safeZoneStatus ===
+                    'inside' && (
+                    <p
+                      style={
+                        styles.insideText
+                      }
+                    >
+                      🟢 Child is inside a Safe Zone
+                    </p>
+                  )}
 
-                {typeof child.latitude ===
-                  'number' &&
-                  typeof child.longitude ===
+                  {child.safeZoneStatus ===
+                    'unknown' && (
+                    <p>
+                      ⚪ Location status unknown
+                    </p>
+                  )}
+
+                  {typeof child.distanceFromSafeZone ===
                     'number' && (
+                    <p>
+                      Distance from nearest Safe Zone:{' '}
+                      {Math.round(
+                        child.distanceFromSafeZone
+                      )}{' '}
+                      meters
+                    </p>
+                  )}
+
+                  {child.locationUpdatedAt && (
+                    <p>
+                      Last update:{' '}
+                      {formatLastUpdate(
+                        child.locationUpdatedAt
+                      )}
+                    </p>
+                  )}
+
+                  <div
+                    style={
+                      styles.childActions
+                    }
+                  >
+                    {typeof child.latitude ===
+                      'number' &&
+                      typeof child.longitude ===
+                        'number' && (
+                        <button
+                          style={
+                            styles.mapButton
+                          }
+                          onClick={() =>
+                            setSelectedChild(
+                              child
+                            )
+                          }
+                        >
+                          📍 Show on Map
+                        </button>
+                      )}
+
                     <button
                       style={
-                        styles.mapButton
+                        styles.smallDangerButton
                       }
                       onClick={() =>
-                        setSelectedChild(
+                        removeChild(
                           child
                         )
                       }
                     >
-                      📍 Show on Map
+                      Remove Child
                     </button>
-                  )}
-              </div>
-            ))
+                  </div>
+                </div>
+              )
+            )
           )}
         </div>
 
         {message && (
           <div
-            style={styles.successBox}
+            style={
+              styles.successBox
+            }
           >
             {message}
           </div>
@@ -1945,7 +2421,9 @@ export default function App() {
 
         {error && (
           <div
-            style={styles.errorBox}
+            style={
+              styles.errorBox
+            }
           >
             {error}
           </div>
@@ -1976,7 +2454,9 @@ function Header({
       </div>
 
       <button
-        style={styles.logoutButton}
+        style={
+          styles.logoutButton
+        }
         onClick={onLogout}
       >
         Logout
@@ -2126,7 +2606,8 @@ const styles = {
 
   header: {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     gap: '15px',
     marginBottom: '25px',
@@ -2188,6 +2669,12 @@ const styles = {
     borderRadius: '12px',
   },
 
+  childActions: {
+    display: 'flex',
+    gap: '10px',
+    flexWrap: 'wrap',
+  },
+
   mapButton: {
     marginTop: '10px',
     padding: '9px 14px',
@@ -2197,6 +2684,45 @@ const styles = {
     color: '#fff',
     cursor: 'pointer',
     fontSize: '14px',
+  },
+
+  smallDangerButton: {
+    marginTop: '10px',
+    padding: '9px 14px',
+    border: 'none',
+    borderRadius: '8px',
+    background: '#dc2626',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '14px',
+  },
+
+  mapDangerButton: {
+    marginTop: '8px',
+    padding: '7px 10px',
+    border: 'none',
+    borderRadius: '7px',
+    background: '#dc2626',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '13px',
+  },
+
+  safeZoneList: {
+    marginTop: '20px',
+  },
+
+  zoneCard: {
+    display: 'flex',
+    justifyContent:
+      'space-between',
+    alignItems: 'center',
+    gap: '15px',
+    padding: '12px',
+    marginTop: '8px',
+    border:
+      '1px solid #e2e8f0',
+    borderRadius: '10px',
   },
 
   insideText: {
@@ -2221,3 +2747,4 @@ const styles = {
     fontSize: '14px',
   },
 }
+```
