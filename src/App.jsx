@@ -1146,10 +1146,10 @@ export default function App() {
     }
 
     const zoneName =
-      window.prompt(
-        'Enter a name for this Safe Zone:',
-        `Safe Zone ${safeZones.length + 1}`
-      )
+     window.prompt(
+  'Enter a name for this Safe Zone:',
+  `Safe Zone ${safeZones.length + 1}`
+    )
 
     if (
       zoneName === null
